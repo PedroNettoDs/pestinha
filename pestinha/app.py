@@ -470,6 +470,8 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         self._atualizar_mesa(now)
         self.memory.tick(now, self.prof["episode_ok"], self.prof["episode_window"])
         st.emotion = emotion
+        st.affect = (self.emotion.valence, self.emotion.arousal)
+        st.forced = self.emotion.override is not None
         self.behavior.on_emotion(emotion, time.monotonic())
 
     def frame(self):

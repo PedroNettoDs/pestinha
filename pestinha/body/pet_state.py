@@ -26,6 +26,8 @@ class PetState:
     def __init__(self):
         """Começa observando, com olhos normais e sem carinho."""
         self.emotion = "observando"
+        self.affect = (0.0, 0.0)        # (valência, ativação) do cérebro: o rosto segue isso quando não está forçado
+        self.forced = False             # sobreposição (sono, susto, drama, protesto): usa a forma fixa da emoção
         self.shape = dict(EYE_SHAPES["observando"])
         self.gaze = (0.0, 0.0)
         self.shake = 0.0

@@ -15,7 +15,7 @@ from PySide6.QtGui import QCursor, QFont, QPainter
 from PySide6.QtWidgets import QWidget
 
 from ..config import EMOTION_NAMES
-from ..core.emotion import EYE_SHAPES
+from ..core.emotion import EYE_SHAPES, shape_from_affect
 from ..core.physics import Body
 from .. import plataforma
 from ..ajustes import (
@@ -112,7 +112,10 @@ class PetWindow(QWidget):
     def animate(self, now):
         """Um quadro da animação: suaviza a forma dos olhos, pisca de tempos em tempos e reposiciona a janela."""
         st = self.state
-        target = dict(EYE_SHAPES.get(st.emotion, EYE_SHAPES["observando"]))
+        if st.forced or st.emotion not in EYE_SHAPES:
+            target = dict(EYE_SHAPES.get(st.emotion, EYE_SHAPES["observando"]))
+        else:
+            target = shape_from_affect(*st.affect)
         if st.emotion != "dormindo":
             droop = st.tone.lid_droop()             # DROWSE pesa as pálpebras, em qualquer emoção
             target["inner"] = min(0.8, target["inner"] + droop)
