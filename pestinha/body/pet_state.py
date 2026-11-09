@@ -30,6 +30,9 @@ class PetState:
         self.forced = False             # sobreposição (sono, susto, drama, protesto): usa a forma fixa da emoção
         self.shape = dict(EYE_SHAPES["observando"])
         self.gaze = (0.0, 0.0)
+        self.exclamacao_until = 0.0     # "!" de quem quer sentar e o notebook está fora do alcance
+        self.lean = 0.0                # graus de inclinação de preparo (antes de girar) e o alvo dela
+        self.lean_target = 0.0
         self.shake = 0.0
         self.tone = MotorTone()
         self.protest_stage = 0

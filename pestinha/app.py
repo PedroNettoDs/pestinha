@@ -45,6 +45,7 @@ from .ajustes import (
     RECOMPENSA_CARINHO as CARESS_REWARD,
     SILENCIO_MOUSE as MOUSE_QUIET,
 )
+from .ajustes import ALCANCE_NOTEBOOK, EXCLAMACAO_SEGUNDOS, LIMIAR_SENTAR_HZ
 from .body.behavior import Behavior
 from .body.bolinha import Ball, load_sprite
 from .body.brincadeira import Play
@@ -530,6 +531,13 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         self.pet.animate(now)
         self.maybe_mischief(now, dt, bounds, cursor, motores)
 
+    def _notebook_perto(self):
+        """Diz se o notebook está ao alcance dele: a distância do corpo até o centro do notebook."""
+        nb = self.mesa.caderno
+        dx = nb.x() + nb.width() / 2 - self.pet.body.x
+        dy = nb.y() + nb.height() / 2 - self.pet.body.y
+        return math.hypot(dx, dy) <= ALCANCE_NOTEBOOK
+
     def _atualizar_mesa(self, now):
         """O neurônio SENTAR decide se ele senta no notebook. Aqui só entram as condições do corpo."""
         rates = self.brain.pool_rates()
@@ -537,7 +545,13 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         pode_sentar = (not self.asleep and self.pet.body.grounded and not self.pet.body.held
                        and not self.behavior.mission and not self.in_flight
                        and not self.castigo.dentro and self.castigo.fuga is None)   # preso ou fugindo não senta
+        if not self._notebook_perto() and motores["SENTAR"] >= LIMIAR_SENTAR_HZ and pode_sentar and not self.mesa.sentado:
+            self.pet_state.exclamacao_until = now + EXCLAMACAO_SEGUNDOS     # quer trabalhar, mas o notebook está longe
+        pode_sentar = pode_sentar and self._notebook_perto()
+        levantou = self.pet_state.at_desk and not self.mesa.sentado
         self.mesa.tick(now, rates, motores["SENTAR"], pode_sentar, self.behavior.play)
+        if levantou:
+            self.pet.raise_()                      # o notebook ficou na frente dele: ele volta para a frente
         self.pet_state.at_desk = self.mesa.sentado
         self.pet_state.desk_top = self.mesa.caderno.y() if self.mesa.sentado else None
         self.behavior.play_pull = pull(rates)

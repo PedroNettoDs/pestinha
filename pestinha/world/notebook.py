@@ -61,10 +61,6 @@ class Notebook(FloatingWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         p.drawPixmap(0, 0, self.sprite)
-        if self.working:                                   # trabalhando: contorno verde
-            p.setPen(QPen(QColor("#63e56f"), 2))
-            p.setBrush(Qt.NoBrush)
-            p.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 6, 6)
         p.end()
 
     def _paint_desenho(self):

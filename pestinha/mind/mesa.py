@@ -20,6 +20,7 @@ from ..ajustes import (
     LIMIAR_SENTAR_HZ,
     PEDIDO_VALIDADE_S,
     FRACAO_ESCONDIDA_NOTEBOOK,
+    DESLOCAMENTO_NOTEBOOK_X,
 )
 from ..log import log
 from ..mathutil import clamp
@@ -72,6 +73,7 @@ class MesaController:
         self.caderno = Notebook(app)            # sempre na tela junto com o pet, arrastável
         self.debug = debug
         self.ancora = None                      # onde o notebook estava quando ele sentou
+        self.ancora_corpo = None                # onde ele estava quando sentou (o corpo não sobe para o notebook)
         self.ultimo_topo = -1e9                 # quando o notebook foi trazido para frente pela última vez
         self.pedido_ate = 0.0                   # até quando um pedido para trabalhar ainda vale
         self.em_pedido = False                  # um pedido está em aberto (ainda não sentou nem recusou)
@@ -133,6 +135,7 @@ class MesaController:
             self.caderno.raise_()                # o notebook fica na frente: ele aparece atrás dele
         if mudanca and mudanca[1] is False:
             self.ancora = None
+            self.ancora_corpo = None
             brincadeira.next_at = 0.0            # levantou: a bolinha fica mais provável agora
         if mudanca and self.debug():
             log(f"[notebook] {'sentou' if mudanca[1] else 'levantou'} "
@@ -142,15 +145,20 @@ class MesaController:
 
     def pin(self, body, now):
         """Fixa o pet atrás do notebook. Devolve "arrancado" se o notebook foi levado longe demais."""
-        if not self.sentado or self.ancora is None:
+        if not self.sentado:
             return None
+        _ex, ey = body.extents()
+        if self.ancora_corpo is None:                  # primeiro quadro sentado: o notebook vai para debaixo dele
+            self.ancora_corpo = (body.x, body.y)
+            self.caderno.move(int(body.x - self.caderno.width() * (0.5 + DESLOCAMENTO_NOTEBOOK_X)),
+                              int(body.y - (2 * FRACAO_ESCONDIDA_NOTEBOOK - 1) * ey))
+            self.ancora = (self.caderno.x(), self.caderno.y())
         dx = self.caderno.x() - self.ancora[0]
         dy = self.caderno.y() - self.ancora[1]
         if (dx * dx + dy * dy) ** 0.5 > ALCANCE_NOTEBOOK:
             return "arrancado"
-        _ex, ey = body.extents()
-        body.x = self.caderno.x() + self.caderno.width() / 2
-        body.y = self.caderno.y() + (2 * FRACAO_ESCONDIDA_NOTEBOOK - 1) * ey   # o centro desce até a tampa esconder a fração
+        body.x = self.ancora_corpo[0] + dx             # ele fica no lugar; só anda se você arrastar o notebook
+        body.y = self.ancora_corpo[1] + dy
         body.vx = body.vy = 0.0
         body.grounded = True
         if now - self.ultimo_topo >= INTERVALO_TOPO:       # o pet não pode ficar por cima do notebook

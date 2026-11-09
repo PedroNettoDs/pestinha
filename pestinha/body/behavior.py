@@ -27,6 +27,10 @@ DELIVER_TIMEOUT = 14.0
 CARRY_GAP = 14
 CROSS_SCREEN_CHANCE = 0.3  # em parte dos passeios, visita deliberadamente um monitor lateral
 CROSS_SCREEN_SPEED = 180.0
+WINDUP_SECONDS = 0.35       # antes de um pulo com giro, ele se prepara: inclina para o lado oposto
+WINDUP_LEAN = 22.0          # graus dessa inclinação
+LEAN_SPEED = 10.0           # 1/s: quão rápido a inclinação segue o alvo
+SPIN_DEGREES = 720.0        # giro do pulo: duas voltas, no sentido escolhido
 
 
 class Behavior:
@@ -55,6 +59,7 @@ class Behavior:
         self.march_dir = 1
         self.next_glance = 0.0
         self.screen_areas = []      # áreas de todos os monitores, atualizadas pelo app
+        self.windup = None          # (até, sentido, vx, vy): preparo de um pulo com giro, em andamento
 
     def look_at(self, x, y, now):
         """Olha para um ponto da tela por alguns segundos."""
@@ -142,6 +147,8 @@ class Behavior:
         if body.held:
             self.drop_carried()
             self.tipped_since = None
+            self.windup = None
+            st.lean_target = 0.0
             return
 
         # objeto carregado acompanha (e solta se o pet cair/voar)
@@ -240,6 +247,22 @@ class Behavior:
             if self.play.tick(now, body, self.ball, cursor, self.emotion, self.play_pull):
                 body.jump(0.0, -180.0)              # pulinho de quem acabou de chutar
 
+        # antecipação: antes de girar, ele se inclina para o lado oposto e só então pula
+        st.lean += (st.lean_target - st.lean) * min(1.0, dt * LEAN_SPEED)
+        if self.windup is not None:
+            fim, sentido, vx, vy = self.windup
+            if self.emotion in STILL or not body.grounded:
+                self.windup = None                  # o preparo cancela se a cabeça muda ou ele sai do chão
+                st.lean_target = 0.0
+            elif now < fim:
+                st.lean_target = -sentido * WINDUP_LEAN
+                return
+            else:
+                self.windup = None
+                st.lean_target = 0.0
+                body.jump(vx, vy, sentido * SPIN_DEGREES)
+                return
+
         # passeio: a emoção escolhe o destino, o tom motor escolhe o jeito
         tone = self.tone
         if self.emotion in STILL:
@@ -253,8 +276,11 @@ class Behavior:
             if platforms and random.random() < tone.climb_chance() and self._jump_to_window(platforms):
                 return
             if random.random() < tone.hop_chance():
-                spin = random.choice((-1, 1)) * 720.0 if random.random() < tone.spin_chance() else 0.0
-                body.jump(body.vx, -tone.hop_power() * random.uniform(0.85, 1.15), spin)
+                vy = -tone.hop_power() * random.uniform(0.85, 1.15)
+                if random.random() < tone.spin_chance():
+                    self.windup = (now + WINDUP_SECONDS, random.choice((-1, 1)), body.vx, vy)
+                else:
+                    body.jump(body.vx, vy)
                 return
 
         if self.target_x is not None:
