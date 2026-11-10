@@ -13,6 +13,8 @@ ROOT =Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import pytest  # noqa: E402
+from PySide6.QtCore import QEvent, QPointF, Qt  # noqa: E402
+from PySide6.QtGui import QMouseEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from pestinha import config  # noqa: E402
@@ -70,6 +72,18 @@ def test_ausente_velho_ou_ilegivel_e_fora_do_ar(tmp_path):
     (tmp_path / "estado.json").write_text("{ pela metade", encoding="utf-8")
     assert Leitor(tmp_path).ler() is FORA_DO_AR
     assert [f.name for f in tmp_path.iterdir()] == ["estado.json"]      # o arquivo do Alfred não é renomeado
+
+
+def test_links_so_enderecos_desta_maquina(tmp_path):
+    publicar(tmp_path, links={"painel": "http://127.0.0.1:7073/painel", "conversa": "http://localhost:7073/painel/conversa",
+                              "fora": "http://exemplo.com/painel", "https": "https://127.0.0.1/painel",
+                              "arquivo": "file:///etc/passwd", "disfarce": "http://127.0.0.1.exemplo.com/x",
+                              "com_query": "http://127.0.0.1:7073/painel?x=1", "numero": 7073})
+    assert Leitor(tmp_path).ler().links == {"painel": "http://127.0.0.1:7073/painel",
+                                            "conversa": "http://localhost:7073/painel/conversa"}
+    publicar(tmp_path, links=["http://127.0.0.1/"])
+    assert Leitor(tmp_path).ler().links == {}
+    assert FORA_DO_AR.links == {}
 
 
 def test_pedir_deixa_um_arquivo_na_pasta_do_alfred(tmp_path):
@@ -206,8 +220,104 @@ def test_aviso_novo_vira_fala_e_postit(app):
     assert [n.text for n in app.alfred.notas] == ["Convite da Fatec"]
     quadro(app, 14.0, eventos=[antigo, novo])
     assert len(app.alfred.notas) == 1                                     # o mesmo aviso não repete
-    app.alfred.notas[0].clicked.emit(app.alfred.notas[0])
+    app.alfred.notas[0].fechada.emit(app.alfred.notas[0])
     assert app.alfred.notas == []
+
+
+def _mouse(nota, tipo, botao, local, global_):
+    """Entrega um evento de mouse ao post-it, com a posição dentro dele e a posição na tela."""
+    apertados = Qt.NoButton if tipo == QEvent.MouseButtonRelease else botao
+    QApplication.sendEvent(nota, QMouseEvent(tipo, QPointF(*local), QPointF(*global_), botao, apertados, Qt.NoModifier))
+
+
+def test_postit_arrasta_abre_o_detalhe_e_so_o_botao_do_meio_fecha(app):
+    quadro(app, 10.0)
+    quadro(app, 12.0, eventos=[{"id": "e1", "tipo": "pendencia", "texto": "Convite da Fatec", "quando": 2.0}])
+    nota = app.alfred.notas[0]
+    assert nota.windowFlags() & Qt.WindowStaysOnBottomHint and not nota.windowFlags() & Qt.WindowStaysOnTopHint
+    nota.por_canto(300, 200)
+    _mouse(nota, QEvent.MouseButtonPress, Qt.LeftButton, (50, 50), (350, 250))
+    _mouse(nota, QEvent.MouseMove, Qt.LeftButton, (50, 50), (470, 310))
+    _mouse(nota, QEvent.MouseButtonRelease, Qt.LeftButton, (50, 50), (470, 310))
+    assert nota.canto() == (420, 260) and not nota.aberta                 # arrastar move e não abre
+    _mouse(nota, QEvent.MouseButtonPress, Qt.LeftButton, (50, 50), (470, 310))
+    _mouse(nota, QEvent.MouseButtonRelease, Qt.LeftButton, (50, 50), (470, 310))
+    assert nota.aberta and nota.canto() == (420, 260) and "Aviso do Alfred" in nota.detalhe   # o clique abre o detalhe
+    voltar = nota.botoes()["voltar"].center()
+    _mouse(nota, QEvent.MouseButtonPress, Qt.LeftButton, (voltar.x(), voltar.y()), (500, 400))
+    _mouse(nota, QEvent.MouseButtonRelease, Qt.LeftButton, (voltar.x(), voltar.y()), (500, 400))
+    assert not nota.aberta and app.alfred.notas == [nota]                 # Voltar fecha só o detalhe
+    _mouse(nota, QEvent.MouseButtonPress, Qt.LeftButton, (50, 50), (470, 310))
+    _mouse(nota, QEvent.MouseButtonRelease, Qt.LeftButton, (50, 50), (470, 310))
+    feito = nota.botoes()["feito"].center()
+    _mouse(nota, QEvent.MouseButtonPress, Qt.LeftButton, (feito.x(), feito.y()), (500, 400))
+    _mouse(nota, QEvent.MouseButtonRelease, Qt.LeftButton, (feito.x(), feito.y()), (500, 400))
+    assert app.alfred.notas == []                                         # Feito tira o post-it
+    quadro(app, 14.0, eventos=[{"id": "e2", "tipo": "pendencia", "texto": "Outro", "quando": 3.0}])
+    outra = app.alfred.notas[0]
+    _mouse(outra, QEvent.MouseButtonPress, Qt.MiddleButton, (50, 50), (0, 0))
+    assert app.alfred.notas == []                                         # o botão do meio fecha
+
+
+def _clicar(nota, botao):
+    centro = nota.botoes()[botao].center()
+    _mouse(nota, QEvent.MouseButtonPress, Qt.LeftButton, (centro.x(), centro.y()), (500, 400))
+    _mouse(nota, QEvent.MouseButtonRelease, Qt.LeftButton, (centro.x(), centro.y()), (500, 400))
+
+
+def test_feito_no_recado_so_encerra_no_alfred_com_sim(app):
+    recados = [{"id": rid, "tipo": "recado", "texto": f"Recado {rid}", "link": ""} for rid in ("r1", "r2")]
+    quadro(app, 10.0, recados=recados)
+    pasta = app.alfred.leitor.pasta
+    for rid, resposta in (("r1", "voltar"), ("r2", "feito")):             # os botões viram Não e Sim
+        nota = app.alfred.recados[rid]
+        nota.abrir(True)
+        _clicar(nota, "feito")
+        assert nota.perguntando and rid in app.alfred.recados             # o Feito só pergunta
+        _clicar(nota, resposta)
+        assert rid not in app.alfred.recados
+    assert pedidos(pasta) == [{"acao": "recado_feito", "id": "r2"}]       # só o Sim chega ao Alfred
+
+
+def test_postits_voltam_no_mesmo_lugar_ao_reabrir(tmp_path):
+    recado = {"id": "r1", "tipo": "recado", "texto": "Marina: pede orçamento", "link": "", "detalhe": "Marina\nQuer preço"}
+    feito = {"id": "r2", "tipo": "recado", "texto": "Já resolvido", "link": ""}
+    app = _montar(tmp_path)
+    quadro(app, 10.0, recados=[recado, feito])
+    quadro(app, 12.0, recados=[recado, feito], eventos=[{"id": "e1", "tipo": "pendencia", "texto": "Convite", "quando": 2.0}])
+    app.alfred.notas[0].por_canto(300, 200)
+    app.alfred.notas[0].movida.emit(app.alfred.notas[0])
+    app.alfred.recados["r1"].por_canto(520, 240)
+    app.alfred.recados["r1"].movida.emit(app.alfred.recados["r1"])
+    app.alfred.recados["r2"].feito.emit(app.alfred.recados["r2"], False)
+    _fechar(app)
+    app = _montar(tmp_path)                                               # o pet reabre: nada foi lido do Alfred ainda
+    try:
+        assert [(n.text, n.canto()) for n in app.alfred.notas] == [("Convite", (300, 200))]
+        nota = app.alfred.recados["r1"]
+        assert list(app.alfred.recados) == ["r1"] and nota.canto() == (520, 240) and nota.detalhe == "Marina\nQuer preço"
+        quadro(app, 10.0, recados=[recado, feito])
+        assert app.alfred.recados == {"r1": nota} and len(app.alfred.notas) == 1   # nem duplica, nem volta o que foi feito
+    finally:
+        _fechar(app)
+
+
+def test_recado_fica_colado_ate_ser_dispensado(app):
+    link = "http://127.0.0.1:7073/painel/pendencias/20261110-marina"
+    recado = {"id": "20261110-marina", "tipo": "recado", "texto": "Marina: pede orçamento", "link": link}
+    quadro(app, 10.0, recados=[recado, {"id": "x", "tipo": "recado", "texto": "fora", "link": "http://golpe.test/x"}])
+    assert [n.text for n in app.alfred.recados.values()] == ["Marina: pede orçamento", "fora"]   # já existia ao abrir: cola
+    assert app.alfred.estado.recados[1]["link"] == ""                      # endereço de fora desta máquina não entra
+    aviso = {"id": "e1", "tipo": "pendencia", "texto": "Marina: pede orçamento", "quando": 2.0}
+    quadro(app, 12.0, recados=[recado], eventos=[aviso])
+    assert app.alfred.notas == [] and list(app.alfred.recados) == ["20261110-marina"]   # um post-it só; "fora" saiu
+    nota = app.alfred.recados["20261110-marina"]
+    nota.fechada.emit(nota)
+    assert app.alfred.recados == {}
+    quadro(app, 14.0, recados=[recado])
+    assert app.alfred.recados == {}                                        # fechado não volta
+    quadro(app, 16.0, recados=[])
+    assert app.alfred.recados_abertos == set()
 
 
 def test_painel_da_fila_blocos_e_menus(app):
@@ -243,6 +353,54 @@ def test_painel_da_fila_blocos_e_menus(app):
     ]
 
 
+LINKS = {"painel": "http://127.0.0.1:7073/painel", "conversa": "http://127.0.0.1:7073/painel/conversa"}
+
+
+def test_atalhos_abrem_a_conversa_ao_lado_do_pet_e_o_painel_no_navegador(app, monkeypatch):
+    from pestinha import plataforma
+    from pestinha.mind import alfred_ctl
+    janelas, abertos = [], []
+    monkeypatch.setattr(plataforma, "abrir_janela_web", lambda *a: janelas.append(a) or True)
+    monkeypatch.setattr(alfred_ctl.QDesktopServices, "openUrl", lambda url: abertos.append(url.toString()) or True)
+
+    quadro(app, 10.0)                                                     # o Alfred ainda não publicou os endereços
+    assert app.alfred.abrir_conversa() is False and app.alfred.abrir_painel() is False
+    painel = app.floats.window("alfred")
+    painel.atualizar()
+    assert [grupo for _r, grupo, _i in painel.blocos] == ["livre", "mais"]
+
+    quadro(app, 12.0, links=LINKS)
+    painel.atualizar()
+    assert [grupo for _r, grupo, _i in painel.blocos] == ["livre", "mais", "conversa", "painel"]
+    assert "microfone" in painel.dica("conversa", None) and "Painel" in painel.dica("painel", None)
+    assert not painel.grab().isNull()
+
+    left, top, right, bottom = app.bounds()
+    app.pet.body.x = right - 60                                           # colado na borda direita: a janela vai para a esquerda
+    assert painel.abrir("conversa") is True and painel.abrir("painel") is True and painel.abrir("mais") is False
+    url, x, y, largura, altura = janelas[0]
+    assert url == LINKS["conversa"] and (largura, altura) == alfred_ctl.JANELA_CONVERSA
+    assert left <= x and x + largura <= right and top <= y and y + altura <= bottom
+    assert abertos == [LINKS["painel"]]                                   # o Painel vai para o navegador padrão
+
+    monkeypatch.setattr(plataforma, "abrir_janela_web", lambda *a: False) # sem Chromium: a conversa também vai para o padrão
+    assert app.alfred.abrir_conversa() is True
+    assert abertos == [LINKS["painel"], LINKS["conversa"]]
+
+
+def test_janela_web_usa_o_modo_app_e_nao_segura_o_pet(monkeypatch):
+    from pestinha.plataforma import _comum
+    chamadas = []
+    monkeypatch.setattr(_comum.shutil, "which", lambda nome: "/usr/bin/brave-browser" if nome == "brave-browser" else None)
+    monkeypatch.setattr(_comum.subprocess, "Popen", lambda cmd, **kw: chamadas.append((cmd, kw)))
+    assert _comum.abrir_janela_web(LINKS["conversa"], 10, 20, 440, 680) is True
+    cmd, kw = chamadas[0]
+    assert cmd == ["/usr/bin/brave-browser", "--app=" + LINKS["conversa"], "--window-size=440,680", "--window-position=10,20"]
+    assert kw["start_new_session"] is True
+    monkeypatch.setattr(_comum.shutil, "which", lambda nome: None)
+    assert _comum.abrir_janela_web(LINKS["conversa"], 0, 0, 1, 1) is False and len(chamadas) == 1
+
+
 def test_alfred_fora_do_ar_no_painel(app):
     publicar(app.alfred.leitor.pasta, atualizado=time.time() - VALIDADE_S - 5, agora=[EMAIL])
     app.alfred._lido_em = -1e9
@@ -253,3 +411,153 @@ def test_alfred_fora_do_ar_no_painel(app):
     menu = painel.menu_de("mais", None)
     assert [a.text() for a in menu.actions()] == ["Alfred fora do ar"]
     assert not painel.grab().isNull()
+
+
+def test_usar_o_alfred_conta_como_atencao(app):
+    app.drives.contact = 0.9                                  # carente
+    quadro(app, 1.0)                                          # retrato sem `notado`: nada muda
+    assert app.drives.contact == 0.9
+    agora = time.time()
+    quadro(app, 2.0, notado=agora)                            # você usou o Alfred: a carência cai
+    assert app.drives.contact == pytest.approx(0.4)
+    quadro(app, 3.0, notado=agora)                            # o mesmo uso não conta duas vezes
+    assert app.drives.contact == pytest.approx(0.4)
+    quadro(app, 4.0, notado=agora - 3600)                     # uso antigo: não conta
+    assert app.drives.contact == pytest.approx(0.4)
+    app.paused = True
+    quadro(app, 5.0, notado=agora + 1)                        # pausado: nada mexe no estado
+    assert app.drives.contact == pytest.approx(0.4)
+
+
+def test_em_cima_da_janela_passeia_na_barra_e_prefere_a_da_frente(app, monkeypatch):
+    from pestinha.body import behavior
+    beh, body = app.behavior, app.pet.body
+    plataformas = [(7, 500.0, 900.0, 300.0), (8, 100.0, 400.0, 500.0)]      # de cima para baixo: a 7 é a da frente
+    ex = body.extents()[0]
+
+    body.platform, beh.target_x = 7, 5000.0
+    monkeypatch.setattr(behavior.random, "random", lambda: 0.99)             # não é hora de descer
+    beh._ficar_na_janela(plataformas)
+    assert beh.target_x == 900.0 - behavior.CLOSE_BUTTONS - ex              # o passeio para antes da beirada
+    beh.target_x = 5000.0
+    monkeypatch.setattr(behavior.random, "random", lambda: 0.0)              # às vezes sai pela beirada e desce
+    beh._ficar_na_janela(plataformas)
+    assert beh.target_x == 5000.0
+
+    body.platform, body.x, body.y = None, 450.0, 800.0
+    monkeypatch.setattr(behavior.random, "choice", lambda opcoes: opcoes[-1])
+    assert beh._jump_to_window(plataformas) and body.vx > 0                  # só a da frente entra no sorteio
+
+
+def test_solto_em_cima_de_um_programa_ele_age(app, monkeypatch):
+    from pestinha import plataforma
+    janelas, programa = [], ["firefox"]
+    monkeypatch.setattr(plataforma, "abrir_janela_web", lambda *a: janelas.append(a) or True)
+    monkeypatch.setattr(plataforma, "programa_em", lambda x, y: programa[0])
+    links = {**LINKS, "escrita": "http://127.0.0.1:7073/painel/escrita"}
+    quadro(app, 1.0, links=links)
+
+    assert app.alfred.solto_em(0, 0, 10.0) is None                         # programa que ele não conhece
+    programa[0] = "wordcraft-0.17.0-linux-x86_64.appimage"
+    assert app.alfred.solto_em(0, 0, 11.0) == "escrita" and janelas[0][0] == links["escrita"]
+    assert app.alfred.solto_em(0, 0, 12.0) is None and len(janelas) == 1   # solto de novo em seguida: não repete
+
+    programa[0] = "thunderbird-bin"
+    assert app.alfred.solto_em(0, 0, 13.0) == "email"
+    assert [(p["acao"], p["tipo"], p["frente"]) for p in pedidos(app.alfred.leitor.pasta)] == [("enfileirar", "email", True)]
+
+    body = app.pet.body                                                     # o sinal do corpo: soltar age, arremessar não
+    app.alfred._solto.clear()
+    body.vx, body.vy = 2000.0, 0.0
+    app.pet.drag_ended.emit()
+    assert not app.alfred._solto
+    body.vx = 0.0
+    app.pet.drag_ended.emit()
+    assert "email" in app.alfred._solto
+
+
+# ---------------- dever: você deixou vencer o que prometeu ----------------
+
+NEGLIGENCIA = {"nivel": 0.6, "motivo": "promessa", "texto": "Mandar o orçamento (Carlos), vencida há 2 dias",
+               "link": "http://127.0.0.1:7073/painel/agenda"}
+PROF_DEVER = {"stage_up": [0.25, 0.5, 0.75, 1.0], "stage_hyst": 0.12}
+
+
+def test_negligencia_do_retrato_e_validada(tmp_path):
+    publicar(tmp_path)
+    assert Leitor(tmp_path).ler().negligencia is None                      # retrato antigo, sem o campo
+    publicar(tmp_path, negligencia=dict(NEGLIGENCIA, nivel=7, link="http://exemplo.com/x", texto="x" * 500))
+    lido = Leitor(tmp_path).ler().negligencia
+    assert lido["nivel"] == 1.0 and lido["link"] == "" and len(lido["texto"]) == TEXTO_MAX
+    for ruim in (None, "muito", {"nivel": "alto"}, {"nivel": 0}, {"nivel": -1}):
+        publicar(tmp_path, negligencia=ruim)
+        assert Leitor(tmp_path).ler().negligencia is None
+
+
+def _dever(tmp_path):
+    from pestinha.core.protesto import Protesto
+    return Protesto(Paths(root=tmp_path).conteudo("alfred").signs, None, kind="dever")
+
+
+def _andar(p, alvo, segundos, carinho=False):
+    """Roda o dever por `segundos` atrás de `alvo`; devolve os estágios por que passou."""
+    estagios = []
+    for i in range(int(segundos * 10)):
+        mudou = p.update(0.1, 0.0, PROF_DEVER, carinho, i * 0.1, alvo=alvo)
+        if mudou:
+            estagios.append(mudou[1])
+    return estagios
+
+
+def test_dever_segue_o_nivel_e_para_nos_bracos_cruzados(tmp_path):
+    p = _dever(tmp_path)
+    assert _andar(p, 0.3, 600) == [1] and abs(p.grievance - 0.3) < 1e-6    # uma tarefa vencida: só o pigarro
+    assert _andar(p, 0.6, 600) == [2]                                      # promessa atrasada: sarcasmo
+    assert _andar(p, 1.0, 600) == [3] and p.grievance <= 1.0               # nunca revolução
+    assert _andar(p, 1.0, 600, carinho=True) == [] and p.stage == 3        # carinho não resolve pendência
+    assert _andar(p, 0.0, 120)[-1] == 0 and p.grievance == 0.0             # resolveu: passa depressa
+
+
+def test_cartazes_do_dever(tmp_path, monkeypatch):
+    from pestinha.core import protesto
+    p = _dever(tmp_path)
+    p.motivo = "x" * 200
+    secoes = protesto.load_signs(p.signs_path)
+    for estagio, secao in protesto.DEVER_SECTION.items():
+        p.stage = estagio
+        monkeypatch.setattr(protesto.random, "random", lambda: 0.9)        # sem citar o motivo
+        info = p.escolher_cartaz()
+        assert info["texto"] in secoes[secao] and not info["bandeira"]
+    p.stage = 2
+    monkeypatch.setattr(protesto.random, "random", lambda: 0.1)            # o sarcasmo cita o que venceu
+    assert len(p.escolher_cartaz()["texto"]) == protesto.MOTIVO_MAX
+    assert p.escolher_cartaz(fim_por_carinho=False)["texto"] in secoes["cumprido"]
+
+
+def test_pet_cobra_o_que_venceu_e_cruza_os_bracos(app):
+    from pestinha.mind import protest_ctl
+    quadro(app, 1.0, negligencia=dict(NEGLIGENCIA, nivel=1.0))
+    assert app.alfred.estado.negligencia["nivel"] == 1.0
+    prof = dict(app.prof, stage_dwell=0.0)
+    for i in range(4000):                                                  # 400 s: chega ao nível 1
+        mudou = app.dever_ctl.tick(0.1, app.pet_state.tone, prof, True, i * 0.1,
+                                   negligencia=app.alfred.estado.negligencia)
+        if mudou:
+            app.dever_ctl.on_stage(*mudou)
+    assert app.dever.stage == 3 and app.dever.motivo == NEGLIGENCIA["texto"]
+    assert not app.alfred._pode_encenar()                                  # de braços cruzados, não encena
+    app.dever_ctl.carry(time.monotonic() + 1, asleep=False)
+    cartaz = app.dever.sign
+    assert cartaz is not None
+    antes = app.dever.grievance
+    app.dever_ctl.on_sign_clicked(cartaz)                                  # fechar não reprime: ele só volta depois
+    assert app.dever.sign is None and app.dever.grievance == antes and app.dever.repressions == 0
+    assert app.dever.respawn_at >= time.monotonic() + protest_ctl.DEVER_VOLTA_S - 5
+
+    # Alfred fora do ar (ou tudo resolvido): a cobrança passa e ele mostra o cartaz de fim
+    for i in range(700):
+        mudou = app.dever_ctl.tick(0.1, app.pet_state.tone, prof, False, 400 + i * 0.1, negligencia=None)
+        if mudou:
+            app.dever_ctl.on_stage(*mudou)
+    assert app.dever.stage == 0 and app.dever.sign is not None
+    app.dever_ctl.drop_sign()

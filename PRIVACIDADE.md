@@ -15,7 +15,9 @@ O Pestinha roda só no seu computador. Ele não envia nada para a internet.
 - Só se você criar `memory/alfred.json`: o arquivo `estado.json` da pasta indicada ali, onde o assistente
   Alfred (outro programa deste computador) publica o que está fazendo, a fila e os avisos dele. O título de
   um aviso aparece na tela, num balão e num post-it. Os pedidos que você faz pela fila são gravados em
-  `pedidos/`, nessa mesma pasta. Nada disso passa pela rede. Veja [docs/ALFRED.md](docs/ALFRED.md).
+  `pedidos/`, nessa mesma pasta. Nada disso passa pela rede. Quando você clica em "Conversar" ou "Abrir
+  terminal", o pet abre no navegador um endereço que o Alfred publicou; só endereços deste computador
+  (`127.0.0.1` ou `localhost`) são aceitos. Veja [docs/ALFRED.md](docs/ALFRED.md).
 
 Ele **não** lê o conteúdo nem o título de nenhuma janela, página, documento ou conversa.
 

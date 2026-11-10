@@ -241,6 +241,11 @@ class Paths:
         return self.memory / "alfred.json"
 
     @property
+    def alfred_notas(self):
+        """Post-its do Alfred que estão na tela (texto, detalhe e posição), para voltarem ao reabrir o pet."""
+        return self.memory / "alfred_notas.json"
+
+    @property
     def log(self):
         """Log do programa (sem conteúdo de janelas)."""
         return self.memory / "logs" / "pestinha.log"

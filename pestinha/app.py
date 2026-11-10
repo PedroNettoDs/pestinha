@@ -148,7 +148,7 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         self.pet.aparencia = aparencia_de(pet_def.get("aparencia"))
         self.pet.poked.connect(self.on_poke)
         self.pet.drag_started.connect(self.on_drag_started)
-        self.pet.drag_ended.connect(lambda: self.senses.set_dragging(False))
+        self.pet.drag_ended.connect(self.on_drag_ended)
         self.pet.thrown.connect(self.on_thrown)
         self.pet.menu_requested.connect(self.show_pet_menu)
         self.ball_stored = False    # você guardou a bolinha pelo menu
@@ -164,6 +164,10 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         self.sad.load(self.prof)
         self.sad_ctl = ProtestController(self.sad, self.pet.body, self.behavior,
                                          self.senses, self.drives, self.pet_state, self.debugging)
+        # dever: você deixou vencer o que prometeu (quem informa é o Alfred). Não é gravado: segue o retrato.
+        self.dever = Protesto(self.conteudo.signs, None, kind="dever")
+        self.dever_ctl = ProtestController(self.dever, self.pet.body, self.behavior,
+                                           self.senses, self.drives, self.pet_state, self.debugging)
         self.ball = Ball(left + 400, self.bounds()[3] - 40, sprite=load_sprite(self.conteudo.bolinha_tenis))
         self.play_weights = pet_def.get("brincadeira", None)
         self.behavior.ball = self.ball
@@ -303,6 +307,7 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         exclude |= {int(w.winId()) for w in self.revolucao.janelas()}
         exclude |= {int(w.winId()) for w in self.protest_ctl.sign_windows()}
         exclude |= {int(w.winId()) for w in self.sad_ctl.sign_windows()}
+        exclude |= {int(w.winId()) for w in self.dever_ctl.sign_windows()}
         exclude |= {int(w.winId()) for w in self.alfred.janelas()}
         if self.ball.isVisible():
             exclude.add(int(self.ball.winId()))
@@ -428,10 +433,16 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
                                        self.drives.channels()["LONELY"])
         if sad_change:
             self.sad_ctl.on_stage(*sad_change)
+        dever_change = self.dever_ctl.tick(dt, st.tone, self.prof, caressing, now,
+                                           negligencia=self.alfred.estado.negligencia)
+        if dever_change:
+            self.dever_ctl.on_stage(*dever_change)
         if self.asleep:
             st.protest_stage = 0
         elif self.protest.stage:
             st.protest_stage = self.protest.stage
+        elif self.dever.stage == 3:
+            st.protest_stage = 3     # braços cruzados: fica sentado, quieto
         else:
             st.protest_stage = 3 if self.sad.stage >= 2 else 0     # abandonado: fica sentado, quieto
         if self.poke_probe and now >= self.poke_probe[0]:
@@ -511,7 +522,13 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         self.behavior.tick(dt, now, cursor, bounds, self.prof, self.platforms)
         self.castigo.act(now, body, bounds, cursor, self.pet_state, motores, asleep=self.asleep)
         preso = self.castigo.dentro                  # no cantinho, nada de greve
+        # um cartaz por vez: a raiva passa na frente do dever, e o dever, da tristeza
         if self.protest.stage == 0:
+            self.dever_ctl.carry(now, self.asleep or preso)
+        elif self.dever.sign is not None:
+            self.dever_ctl.drop_sign()
+            self.dever.respawn_at = now             # volta quando a raiva passar
+        if self.protest.stage == 0 and self.dever.stage == 0 and self.dever.sign is None:
             self.sad_ctl.carry(now, self.asleep or preso)
         else:
             self.sad_ctl.drop_sign()

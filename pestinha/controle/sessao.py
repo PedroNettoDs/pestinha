@@ -73,6 +73,7 @@ class SessaoMixin:
         self.floats.sync(self.floats_allowed(), self.floats_base())
         self.protest_ctl.set_visible(visible, self.asleep)
         self.sad_ctl.set_visible(visible, self.asleep)
+        self.dever_ctl.set_visible(visible, self.asleep)
         if not visible:
             self.castigo.pausar(self.pet_state)
         bola_visivel = visible and self.perms["bolinha"] and not self.ball_stored
@@ -143,6 +144,7 @@ class SessaoMixin:
         self.clear_things()
         self.protest_ctl.drop_sign()
         self.sad_ctl.drop_sign()
+        self.dever_ctl.drop_sign()
         if self.settings:
             self.settings.set_active(False)
         self.update_visibility()
@@ -204,6 +206,7 @@ class SessaoMixin:
             if not self.wiping:
                 self.protest_ctl.drop_sign()
                 self.sad_ctl.drop_sign()
+                self.dever_ctl.drop_sign()
                 if self.perms["rotina"]:
                     self.timeline.close()
                 self.mischief.clear()

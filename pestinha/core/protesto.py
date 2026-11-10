@@ -39,10 +39,19 @@ DEFAULT_SIGNS = {
     "chorando": ["tô chorando :(", "me visita?"],
     "abandonado": ["...", "não vou sair daqui"],
     "volto": ["VOLTEI!", "saudade de você"],
+    # dever (o pet vê você deixar vencer o que prometeu: quem informa é o Alfred)
+    "pigarro": ["ahem.", "tem coisa vencida"],
+    "sarcasmo": ["PODE ESPERAR, CLARO", "SÓ OBSERVO"],
+    "bracos_cruzados": ["NÃO DIGO MAIS NADA", "QUANDO VOCÊ QUISER"],
+    "cumprido": ["AGORA SIM", "eu sabia"],
 }
 STAGE_SECTION = {1: "reclamacao", 2: "manifestacao", 3: "greve", 4: "revolucao"}
 SAD_SECTION = {1: "saudade", 2: "chorando", 3: "abandonado"}
-MAX_STAGE = {"raiva": 4, "tristeza": 3}
+DEVER_SECTION = {1: "pigarro", 2: "sarcasmo", 3: "bracos_cruzados"}
+MAX_STAGE = {"raiva": 4, "tristeza": 3, "dever": 3}      # dever para nos braços cruzados: não há revolução
+DEVER_SOBE_S = 300.0       # s para a insatisfação do dever ir de 0 a 1 atrás do nível informado
+DEVER_DESCE_S = 60.0       # resolvido, ela cai bem mais depressa
+MOTIVO_MAX = 60            # caracteres do motivo que cabem num cartaz
 SAD_STYLE = {1: "sad", 2: "sad", 3: "sad"}     # azul e sem vermelho: não se confunde com greve
 
 
@@ -68,10 +77,11 @@ def load_signs(path):
 
 
 class Protesto:
-    """Insatisfação do pet e o estágio em que ele está (paz, reclamação, manifestação, greve, revolução). Serve para a raiva e para a tristeza."""
+    """Insatisfação do pet e o estágio em que ele está (paz, reclamação, manifestação, greve, revolução). Serve para a raiva, para a tristeza e para o dever."""
     def __init__(self, signs_path, state_path, kind="raiva"):
-        """Carrega os cartazes e o estado salvo; `kind` diz se é raiva ou tristeza."""
-        self.kind = kind                # "raiva" (protesto) ou "tristeza" (abandono)
+        """Carrega os cartazes e o estado salvo; `kind` diz se é raiva, tristeza ou dever."""
+        self.kind = kind                # "raiva" (protesto), "tristeza" (abandono) ou "dever" (você deixou vencer)
+        self.motivo = ""                # dever: o que venceu, nas palavras do Alfred
         self.signs = load_signs(signs_path)
         self.signs_path = signs_path
         self.state_path = state_path
@@ -87,10 +97,18 @@ class Protesto:
 
     # ---------------- dinâmica ----------------
 
-    def update(self, dt, rate, prof, caressing, now):
-        """Integra a intensidade (raiva ou tristeza, já medida pelo chamador). Devolve (antigo, novo) se mudou."""
-        self.grievance += dt * (rate / prof["grievance_up"] - 1.0 / prof["grievance_down"])
-        if caressing:
+    def update(self, dt, rate, prof, caressing, now, alvo=None):
+        """
+        Integra a intensidade (raiva ou tristeza, já medida pelo chamador). Devolve (antigo, novo) se mudou.
+        Com `alvo` (dever), a insatisfação anda até ele em passo constante e o carinho não alivia.
+        """
+        if alvo is not None:
+            falta = alvo - self.grievance
+            passo = dt / (DEVER_SOBE_S if falta > 0 else DEVER_DESCE_S)
+            self.grievance += max(-passo, min(passo, falta))
+        else:
+            self.grievance += dt * (rate / prof["grievance_up"] - 1.0 / prof["grievance_down"])
+        if caressing and alvo is None:
             self.grievance -= CARESS_RELIEF * dt
             self.last_caress = now
         self.grievance = max(0.0, min(MAX_GRIEVANCE, self.grievance))
@@ -142,6 +160,14 @@ class Protesto:
         Decide o texto, o estilo e se é bandeira. Quem desenha é world/cartazes.py.
         Devolve um dict: texto, estilo, bandeira (bool) e escala.
         """
+        if self.kind == "dever":
+            if fim_por_carinho is not None:
+                return {"texto": self.pick("cumprido"), "estilo": "end", "bandeira": False, "escala": 1.0}
+            if self.stage == 2 and self.motivo and random.random() < 0.5:      # o sarcasmo cita o que venceu
+                motivo = self.motivo if len(self.motivo) <= MOTIVO_MAX else self.motivo[:MOTIVO_MAX - 1] + "…"
+                return {"texto": motivo.upper(), "estilo": "castigo", "bandeira": False, "escala": 1.0}
+            estilo = {1: "small", 2: "march", 3: "strike"}[self.stage]
+            return {"texto": self.pick(DEVER_SECTION[self.stage]), "estilo": estilo, "bandeira": False, "escala": 1.0}
         if fim_por_carinho is not None:
             if self.kind == "tristeza":
                 return {"texto": self.pick("volto"), "estilo": "end", "bandeira": False, "escala": 1.0}

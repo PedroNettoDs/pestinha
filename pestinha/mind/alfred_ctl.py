@@ -4,25 +4,40 @@ ALFRED CONTROLLER - o pet encena o que o Alfred está fazendo e deixa você mexe
 É regra explícita, não decisão da rede: enquanto o Alfred trabalha, um balão em cima do pet mostra a
 atividade e o andamento, e ele se mexe conforme o tipo. Carrega objetos de um lado ao outro da tela
 (e-mails, notas, caixas), faz a ronda, ou vai até o notebook; aí quem decide sentar é o neurônio SENTAR,
-pelo sinal PEDIDO. Dormindo, de castigo, em protesto ou na sua mão, ele não encena. Um aviso do Alfred
-(pendência nova) vira uma fala no balão e um post-it.
+pelo sinal PEDIDO. Dormindo, de castigo, em protesto, de braços cruzados (dever) ou na sua mão, ele não encena. Um aviso do Alfred
+(pendência nova) vira uma fala no balão e um post-it; um recado também fica num post-it. Esses post-its se
+arrastam, ficam atrás das outras janelas, o clique abre o detalhe (com Feito e Voltar), só o botão do meio fecha, e eles voltam ao mesmo lugar
+quando o pet reabre (memory/alfred_notas.json). Usar o Alfred (Painel, conversa, WhatsApp, fila) conta como atenção: a carência
+dele diminui (`notado` no retrato). Solto com a mão em cima de um programa conhecido (PROGRAMAS), ele age:
+no WordCraft abre a Escrita, no Thunderbird manda ler os e-mails. Também abre no navegador os endereços locais que o Alfred
+publica: o Painel e a conversa com ele.
 """
 
 import math
+import time
 
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
+
+from .. import plataforma
 from ..ajustes import EXCLAMACAO_SEGUNDOS
 from ..log import log
 from ..sense.alfred import FORA_DO_AR, Leitor, pasta_do_alfred
-from ..world.alfred_objetos import BalaoThing, PropThing, icone_de
-from ..world.objetos import NoteThing
+from ..store import read_json, write_json
+from ..world.alfred_objetos import AnotacaoThing, BalaoThing, PropThing, icone_de
 
 LER_A_CADA = 1.0        # s entre leituras do retrato do Alfred
 MARGEM = 140            # px da borda da tela até os pontos de carga e de entrega
 PRAZO = 20.0            # s: uma travessia que não chega é abandonada
 FALA_SEGUNDOS = 8.0     # quanto tempo um aviso fica no balão
 MAX_NO_CHAO = 3         # objetos entregues que ficam no chão; os mais antigos somem
-MAX_NOTAS = 4
+MAX_NOTAS = 12          # post-its de aviso na tela; passando disso, o mais antigo sai
+NOTADO_VALE_S = 60.0    # uso do Alfred mais antigo que isso (pet aberto depois) não conta como atenção
 CENAS = {"email": "carregar", "rag": "carregar", "backup": "carregar", "vigia": "ronda"}   # o resto: "mesa"
+# Solto em cima da janela de um programa (pedaço do nome do processo) -> o que ele faz.
+PROGRAMAS = (("wordcraft", "escrita"), ("thunderbird", "email"))
+SOLTO_ESPERA = 20.0     # s até a mesma ação poder disparar de novo
+JANELA_CONVERSA = (440, 680)    # px: a caixinha de conversa, estreita o bastante para o Painel mostrar só o chat
 
 
 class AlfredController:
@@ -39,12 +54,18 @@ class AlfredController:
         self.carga = None           # objeto que ele está levando
         self.objetos = []           # objetos já entregues, no chão
         self.notas = []             # post-its dos avisos
+        self.recados = {}           # id do recado -> post-it colado
+        self.recados_abertos = set()    # recados que você fechou ou marcou como feitos: não voltam para a tela
         self.fala = None            # (texto, até quando)
         self.vistos = None          # ids de avisos já mostrados; None até a primeira leitura
+        self._notado = None         # o último uso do Alfred já contado como atenção
+        self._solto = {}            # ação -> quando disparou pela última vez
         self.visivel = False
         self._lido_em = -1e9
         self._missao = None         # a travessia que este controlador pediu ao comportamento
         self._cena = None
+        if self.ligado:
+            self._restaurar()
 
     @property
     def ligado(self):
@@ -69,12 +90,27 @@ class AlfredController:
         self.vistos = (self.vistos or set()) | {e["id"] for e in self.estado.eventos}
         for evento in novos:
             self._avisar(evento, now)
+        self._colar_recados()
+        self._sentir_notado()
         if trabalhava and self.atividade() is None:
             body = self.app.pet.body
             if body.grounded and not self.app.asleep:
                 body.jump(0.0, -260.0)              # terminou: um pulinho
             if self.debug():
                 log("[alfred] terminou o trabalho")
+
+    def _sentir_notado(self):
+        """Você usou o Alfred agora há pouco: para o pet é atenção, e a carência (solidão) diminui."""
+        quando = self.estado.notado
+        if quando is None or quando == self._notado:
+            return
+        self._notado = quando
+        if abs(self.leitor.relogio() - quando) > NOTADO_VALE_S or self.app._congelado():
+            return
+        self.app.drives.touched("alfred")
+        self.app.timeline.note_interaction()
+        if self.debug():
+            log(f"[alfred] notado: {self.app.drives.describe()}")
 
     def pedido(self):
         """0..1 para o canal PEDIDO da rede: o Alfred está num trabalho de mesa e o pet pode encenar."""
@@ -85,25 +121,109 @@ class AlfredController:
         self.app.pet_state.exclamacao_until = now + EXCLAMACAO_SEGUNDOS
         self.app.senses.kick("NOVELTY", 0.8)
         self.fala = (f"{icone_de(evento['tipo'])} {evento['texto']}".strip(), now + FALA_SEGUNDOS)
-        if evento["texto"] and self.app.perms["bilhetes"]:
-            nota = NoteThing(evento["texto"])
-            nota.clicked.connect(self._fechar_nota)
-            body = self.app.pet.body
-            left, top, right, _bottom = self.app.bounds()
-            lado = -1 if body.x > (left + right) / 2 else 1         # para o lado com mais espaço
-            nota.place(body.x + lado * (150 + 30 * len(self.notas)),
-                       max(top + nota.height() / 2, body.y - 120))
-            nota.setVisible(self.visivel)
-            self.notas.append(nota)
+        e_recado = any(r["texto"] == evento["texto"] for r in self.estado.recados)   # o recado já tem o post-it dele
+        if evento["texto"] and self.app.perms["bilhetes"] and not e_recado:
+            quando = time.strftime("%d/%m às %H:%M", time.localtime(evento["quando"])) if evento["quando"] else ""
+            detalhe = f"{icone_de(evento['tipo'])} Aviso do Alfred" + (f", {quando}" if quando else "")
+            self.notas.append(self._nova_nota(evento["texto"], detalhe, len(self.notas)))
             for velha in self.notas[:-MAX_NOTAS]:
                 self._fechar_nota(velha)
+            self._guardar()
+
+    def _nova_nota(self, texto, detalhe, deslocamento, rid=None, canto=None):
+        """Um post-it ao lado do pet, do lado com mais espaço (ou no `canto` guardado); `rid` é o recado dele."""
+        nota = AnotacaoThing(texto, detalhe, pergunta=rid is not None)
+        if canto is None:
+            body = self.app.pet.body
+            left, top, right, _bottom = self.app.bounds()
+            lado = -1 if body.x > (left + right) / 2 else 1
+            nota.place(body.x + lado * (150 + 30 * deslocamento), max(top + nota.height() / 2, body.y - 120))
+        else:
+            nota.por_canto(*canto)
+        if rid is None:
+            nota.feito.connect(lambda nota, _encerrar: self._fechar_nota(nota))
+            nota.fechada.connect(self._fechar_nota)
+        else:
+            nota.feito.connect(lambda _nota, encerrar, rid=rid: self._dispensar_recado(rid, encerrar))
+            nota.fechada.connect(lambda _nota, rid=rid: self._dispensar_recado(rid))
+        nota.movida.connect(lambda _nota: self._guardar())
+        nota.setVisible(self.visivel)
+        return nota
+
+    # ---------------- post-its guardados ----------------
+
+    def _guardar(self):
+        """Grava os post-its que estão na tela e os recados já dispensados, para a próxima abertura."""
+        def item(nota, **mais):
+            cx, cy = nota.canto()
+            return dict(texto=nota.text, detalhe=nota.detalhe, x=round(cx), y=round(cy), **mais)
+        try:
+            write_json(self.app.paths.alfred_notas, {
+                "notas": [item(n) for n in self.notas],
+                "recados": [item(n, id=rid) for rid, n in self.recados.items()],
+                "dispensados": sorted(self.recados_abertos)})
+        except (OSError, ValueError) as e:
+            log(f"[alfred] post-its não gravados ({e})")
+
+    def _restaurar(self):
+        """Recoloca na tela os post-its da última vez, cada um onde estava."""
+        dados = read_json(self.app.paths.alfred_notas, default=None)
+        if not isinstance(dados, dict):
+            return
+        def itens(nome):
+            lista = dados.get(nome) if isinstance(dados.get(nome), list) else []
+            return [d for d in lista if isinstance(d, dict) and isinstance(d.get("texto"), str) and d["texto"]
+                    and all(isinstance(d.get(k), (int, float)) for k in ("x", "y"))]
+        for d in itens("notas")[-MAX_NOTAS:]:
+            self.notas.append(self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0, canto=(d["x"], d["y"])))
+        for d in itens("recados"):
+            if isinstance(d.get("id"), str) and d["id"] and d["id"] not in self.recados:
+                self.recados[d["id"]] = self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0,
+                                                        rid=d["id"], canto=(d["x"], d["y"]))
+        dispensados = dados.get("dispensados") if isinstance(dados.get("dispensados"), list) else []
+        self.recados_abertos = {r for r in dispensados if isinstance(r, str)}
+
+    def _colar_recados(self):
+        """Um post-it por recado que espera você; some quando o Alfred tira o recado da lista ou você o dispensa."""
+        if not self.estado.online:
+            return                                  # Alfred fora do ar: o que está colado fica
+        atuais = {r["id"]: r for r in self.estado.recados}
+        antes = (set(self.recados), len(self.notas), set(self.recados_abertos))
+        for rid in [rid for rid in self.recados if rid not in atuais]:
+            self._tirar_recado(rid)
+        self.recados_abertos &= set(atuais)
+        for rid, recado in atuais.items() if self.app.perms["bilhetes"] else ():
+            if rid in self.recados or rid in self.recados_abertos:
+                continue
+            for nota in [n for n in self.notas if n.text == recado["texto"]]:
+                self._fechar_nota(nota)             # o aviso do mesmo recado chegou antes: fica só um post-it
+            self.recados[rid] = self._nova_nota(recado["texto"], recado["detalhe"],
+                                                len(self.notas) + len(self.recados), rid=rid)
+        if antes != (set(self.recados), len(self.notas), set(self.recados_abertos)):
+            self._guardar()
+
+    def _dispensar_recado(self, rid, encerrar=False):
+        """Você marcou o recado como feito ou fechou o post-it (botão do meio): ele sai e não volta para a tela.
+        Com `encerrar` (o Sim do Feito), pede ao Alfred que feche a pendência também."""
+        if encerrar:
+            self.leitor.pedir("recado_feito", id=rid)
+        self.recados_abertos.add(rid)
+        self._tirar_recado(rid)
+        self._guardar()
+
+    def _tirar_recado(self, rid):
+        nota = self.recados.pop(rid, None)
+        if nota:
+            nota.close()
+            nota.deleteLater()
 
     def _fechar_nota(self, nota):
-        """Você clicou no post-it do aviso: ele some (não é travessura, não conta como dispensa)."""
+        """Você marcou o aviso como feito ou fechou o post-it: ele some (não é travessura, não conta como dispensa)."""
         if nota in self.notas:
             self.notas.remove(nota)
         nota.close()
         nota.deleteLater()
+        self._guardar()
 
     # ---------------- cena (a cada quadro) ----------------
 
@@ -112,7 +232,7 @@ class AlfredController:
         app = self.app
         return (self.visivel and not app.asleep and not app.castigo.dentro and app.castigo.fuga is None
                 and not app.pet.body.held and not app.in_flight
-                and app.protest.stage == 0 and app.sad.stage < 2)
+                and app.protest.stage == 0 and app.sad.stage < 2 and app.dever.stage < 3)
 
     def act(self, now, dt, bounds):
         """Um quadro: escolhe a cena pela atividade, move o pet e os objetos e posiciona o balão."""
@@ -231,7 +351,7 @@ class AlfredController:
                 texto += f" {int(feito)}/{int(atividade['total'])}"
                 fracao = max(0.0, min(1.0, feito / atividade["total"]))
         if (texto is None or not self.visivel or app.asleep
-                or app.protest.sign is not None or app.sad.sign is not None):
+                or app.protest.sign is not None or app.sad.sign is not None or app.dever.sign is not None):
             self.balao.hide()
             return
         self.balao.definir(texto, fracao)
@@ -257,25 +377,74 @@ class AlfredController:
         """Tira um item da fila."""
         return self.ligado and self.leitor.pedir("cancelar", id=item_id)
 
+    # ---------------- navegador ----------------
+
+    def abrir_painel(self):
+        """Abre o Painel do Alfred (o "terminal" dele) no navegador padrão. Devolve False se ele não publicou o endereço."""
+        url = self.estado.links.get("painel")
+        return bool(url) and QDesktopServices.openUrl(QUrl(url))
+
+    def solto_em(self, x, y, now):
+        """Você soltou o pet no ponto (x, y): conforme o programa da janela ali, ele age. Devolve a ação, ou None."""
+        if not self.estado.online:
+            return None
+        programa = plataforma.programa_em(x, y) or ""
+        acao = next((a for trecho, a in PROGRAMAS if trecho in programa), None)
+        if acao is None or now - self._solto.get(acao, -1e9) < SOLTO_ESPERA:
+            return None
+        if acao == "escrita":
+            feito = self._abrir_ao_lado("escrita")
+            fala = "✍️ Abrindo a Escrita"
+        else:
+            ocupado = any(i["tipo"] == acao for i in (*self.estado.agora, *self.estado.fila))
+            feito = ocupado or (any(c["tipo"] == acao for c in self.estado.catalogo) and self.enfileirar(acao))
+            fala = f"{icone_de(acao)} " + ("Já estou nos e-mails" if ocupado else "Vou olhar os e-mails e a agenda")
+        if not feito:
+            return None
+        self._solto[acao] = now
+        self.fala = (fala, now + FALA_SEGUNDOS)
+        if self.debug():
+            log(f"[alfred] solto em {programa}: {acao}")
+        return acao
+
+    def abrir_conversa(self):
+        """Abre a conversa com o Alfred numa janela pequena ao lado do pet (ou no navegador padrão, sem um Chromium)."""
+        return self._abrir_ao_lado("conversa")
+
+    def _abrir_ao_lado(self, nome):
+        """Abre o endereço `nome` dos links do Alfred numa janela pequena ao lado do pet."""
+        url = self.estado.links.get(nome)
+        if not url:
+            return False
+        largura, altura = JANELA_CONVERSA
+        left, top, right, bottom = self.app.bounds()
+        body = self.app.pet.body
+        x = body.x + 90 if body.x + 90 + largura <= right else body.x - 90 - largura     # do lado que couber
+        x = int(min(right - largura, max(left, x)))
+        y = int(max(top, bottom - altura - 12))
+        return plataforma.abrir_janela_web(url, x, y, largura, altura) or QDesktopServices.openUrl(QUrl(url))
+
     # ---------------- sessão ----------------
 
     def janelas(self):
         """Janelas deste controlador que estão na tela (o pet não deve tentar pousar nelas)."""
-        todas = [self.balao, *self.objetos, *self.notas] + ([self.carga] if self.carga else [])
+        todas = [self.balao, *self.objetos, *self.notas, *self.recados.values()] + ([self.carga] if self.carga else [])
         return [w for w in todas if w.isVisible()]
 
     def set_visible(self, visivel):
         """Mostra ou esconde tudo junto com o pet (o balão volta no próximo quadro, se couber)."""
         self.visivel = visivel
-        for w in [*self.objetos, *self.notas] + ([self.carga] if self.carga else []):
+        for w in [*self.objetos, *self.notas, *self.recados.values()] + ([self.carga] if self.carga else []):
             w.setVisible(visivel)
         if not visivel:
             self.balao.hide()
 
     def fechar(self):
-        """Fecha tudo ao sair."""
+        """Fecha tudo ao sair. Os post-its continuam guardados: voltam na próxima abertura."""
         self._soltar_carga()
         self._limpar_objetos()
-        for nota in list(self.notas):
-            self._fechar_nota(nota)
+        for nota in [*self.notas, *self.recados.values()]:
+            nota.close()
+            nota.deleteLater()
+        self.notas, self.recados = [], {}
         self.balao.close()

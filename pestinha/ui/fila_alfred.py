@@ -3,7 +3,7 @@ FILA DO ALFRED - a fila de ações do Alfred na tela, como a de um jogo: o que e
 
 Da esquerda para a direita: o que está em andamento (borda verde, com o andamento), o que você pediu (na
 ordem em que vai rodar), as próximas rotinas agendadas (apagadas, com a hora) e o "+", que abre a lista do
-que dá para pedir. Clique num item da fila para passar para a frente ou tirar; numa agendada, para adiantar.
+que dá para pedir. No fim, dois atalhos: conversar com o Alfred e abrir o Painel dele no navegador. Clique num item da fila para passar para a frente ou tirar; numa agendada, para adiantar.
 Arrasta-se como os outros painéis.
 """
 
@@ -88,6 +88,7 @@ class FilaAlfred(FloatingWidget):
         grupos += [("fila", i) for i in estado.fila[:MAX_FILA]]
         grupos += [("agendada", a) for a in estado.agendadas if a["quando"] > agora][:MAX_AGENDADAS]
         grupos.append(("mais", None))
+        grupos += [(nome, None) for nome in ("conversa", "painel") if nome in estado.links]
         self.blocos = [(QRectF(BORDA + n * (LADO + VAO), TOPO, LADO, LADO), grupo, item)
                        for n, (grupo, item) in enumerate(grupos)]
         largura = max(LARGURA_MINIMA, 2 * BORDA + len(grupos) * (LADO + VAO) - VAO)
@@ -131,14 +132,15 @@ class FilaAlfred(FloatingWidget):
 
     def _bloco(self, p, rect, grupo, item, posicao):
         """Um bloco: a borda diz o grupo; dentro, o emoji; embaixo, a hora (agendadas)."""
-        borda = {"agora": QPen(GOOD, 2), "fila": QPen(MUTED, 1.3)}.get(grupo, QPen(GRID, 1.3, Qt.DashLine))
+        borda = {"agora": QPen(GOOD, 2), "fila": QPen(MUTED, 1.3), "conversa": QPen(MUTED, 1.3),
+                 "painel": QPen(MUTED, 1.3)}.get(grupo, QPen(GRID, 1.3, Qt.DashLine))
         p.setPen(borda)
         p.setBrush(PANEL)
         p.drawRoundedRect(rect, 8, 8)
         p.setOpacity(0.45 if grupo in ("agendada", "livre") else 1.0)
         p.setPen(MUTED)
         p.setFont(fonte(24))
-        simbolo = {"mais": "+", "livre": "💤"}.get(grupo) or icone_de(item["tipo"])
+        simbolo = {"mais": "+", "livre": "💤", "conversa": "💬", "painel": "🖥️"}.get(grupo) or icone_de(item["tipo"])
         p.drawText(rect, Qt.AlignCenter, simbolo)
         p.setOpacity(1.0)
         if grupo == "agora" and item["total"]:
@@ -160,6 +162,16 @@ class FilaAlfred(FloatingWidget):
     def bloco_em(self, pos):
         """(grupo, item) do bloco que contém o ponto, ou (None, None)."""
         return next(((grupo, item) for rect, grupo, item in self.blocos if rect.contains(pos)), (None, None))
+
+    def abrir(self, grupo):
+        """Os blocos de atalho: a conversa numa janela ao lado do pet e o Painel no navegador. False nos outros."""
+        if grupo == "conversa":
+            self.app.alfred.abrir_conversa()
+        elif grupo == "painel":
+            self.app.alfred.abrir_painel()
+        else:
+            return False
+        return True
 
     def menu_de(self, grupo, item):
         """O menu de um bloco: pedir (no "+"), reordenar ou tirar (na fila), adiantar (nas agendadas)."""
@@ -187,7 +199,9 @@ class FilaAlfred(FloatingWidget):
             return f"Na fila: {item['rotulo']}. Clique para passar para a frente ou tirar."
         if grupo == "agendada":
             return f"{item['rotulo']}, agendada para {hora(item['quando'])}. Clique para adiantar."
-        return {"mais": "Pedir uma rotina ao Alfred", "livre": "Nada em andamento"}.get(grupo, "")
+        return {"mais": "Pedir uma rotina ao Alfred", "livre": "Nada em andamento",
+                "conversa": "Conversar com o Alfred (texto ou microfone)",
+                "painel": "Abrir o terminal do Alfred: o Painel, no navegador"}.get(grupo, "")
 
     def mousePressEvent(self, event):
         """Guarda onde o botão apertou, para separar clique de arraste."""
@@ -201,9 +215,11 @@ class FilaAlfred(FloatingWidget):
         solto = event.globalPosition().toPoint()
         if apertou is None or (solto - apertou).manhattanLength() > ARRASTE_PX:
             return
-        menu = self.menu_de(*self.bloco_em(event.position()))
-        if menu is not None:
-            menu.exec(solto)
+        grupo, item = self.bloco_em(event.position())
+        if not self.abrir(grupo):
+            menu = self.menu_de(grupo, item)
+            if menu is not None:
+                menu.exec(solto)
 
     def event(self, event):
         """Dica de cada bloco."""

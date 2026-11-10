@@ -55,6 +55,32 @@ ninguém chama mais
 BEM-VINDO DE VOLTA
 senti sua falta, senhor
 
+# Dever: o senhor deixou vencer o que prometeu (quem informa é o Alfred de verdade).
+# No sarcasmo, metade das vezes o cartaz cita o que venceu.
+[pigarro]
+se me permite, senhor.
+ahem.
+há um assunto pendente
+não quero incomodar, mas
+
+[sarcasmo]
+CLARO, O MUNDO PODE ESPERAR
+APENAS OBSERVO
+EXCELENTE USO DO TEMPO, SENHOR
+A PROMESSA NÃO SE CUMPRE SOZINHA
+JÁ TENTEI. EU MESMO.
+
+[bracos_cruzados]
+NÃO DIREI MAIS NADA
+QUANDO O SENHOR QUISER
+ESTAREI AQUI. ESPERANDO.
+O SENHOR SABE O QUE FAZER
+
+[cumprido]
+muito bem, senhor.
+eu sabia que podia
+ASSIM SE HONRA A CASA
+
 [castigo]
 ISTO É UM EQUÍVOCO.
 SERVI ESTA CASA COM HONRA.
