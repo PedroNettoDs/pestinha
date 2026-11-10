@@ -10,12 +10,12 @@ import math
 import random
 import time
 
-from PySide6.QtCore import QRect, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QCursor, QFont, QPainter
 from PySide6.QtWidgets import QWidget
 
 from ..config import EMOTION_NAMES
-from ..core.emotion import EYE_SHAPES
+from ..core.emotion import EYE_SHAPES, shape_from_affect
 from ..core.physics import Body
 from .. import plataforma
 from ..ajustes import (
@@ -26,7 +26,19 @@ from ..ajustes import (
     JANELA_CARINHO as RUB_WINDOW,
     TROCAS_CARINHO as RUB_REVERSALS,
     DESLOCAMENTO_CARINHO as RUB_MIN_TRAVEL,
+    DURACAO_TONTURA as DIZZY_SECONDS,
 )
+
+WHEEL_DIZZY_OMEGA = 600.0       # graus/s: girar mais rápido que isso deixa ele tonto
+TYPING_DEGREES = 1.2            # balanço de quem digita, sentado no notebook
+TYPING_HZ = 2.4
+
+
+def digitacao_graus(sentado, now):
+    """Balanço pequeno e rítmico enquanto ele está sentado digitando; zero quando não está."""
+    if not sentado:
+        return 0.0
+    return TYPING_DEGREES * math.sin(now * math.tau * TYPING_HZ)
 
 from .desenho_rosto import BODY_H, BODY_W, PADRAO, draw_face, draw_zzz, lerp_shape
 
@@ -118,7 +130,10 @@ class PetWindow(QWidget):
     def animate(self, now):
         """Um quadro da animação: suaviza a forma dos olhos, pisca de tempos em tempos e reposiciona a janela."""
         st = self.state
-        target = dict(EYE_SHAPES.get(st.emotion, EYE_SHAPES["observando"]))
+        if st.forced or st.emotion not in EYE_SHAPES:
+            target = dict(EYE_SHAPES.get(st.emotion, EYE_SHAPES["observando"]))
+        else:
+            target = shape_from_affect(*st.affect)
         if st.emotion != "dormindo":
             droop = st.tone.lid_droop()             # DROWSE pesa as pálpebras, em qualquer emoção
             target["inner"] = min(0.8, target["inner"] + droop)
@@ -141,10 +156,7 @@ class PetWindow(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         st = self.state
-        if st.desk_top is not None:
-            # sentado: o corpo some atrás da tampa do notebook (corta no nível dela, não depende da ordem das janelas)
-            corte = int(st.desk_top - self.y())
-            p.setClipRect(QRect(0, 0, self.width(), max(0, min(self.height(), corte))))
+        # sentado: o notebook fica na frente dele (ver mesa.py); a tampa esconde só onde é opaca
         shake = st.shake
         jitter_x = random.uniform(-shake, shake) if shake else 0.0
         jitter_y = random.uniform(-shake, shake) if shake else 0.0
@@ -158,13 +170,17 @@ class PetWindow(QWidget):
 
         p.save()
         p.translate(CX + jitter_x, CY + jitter_y)
-        p.rotate(self.body.angle + sway)
+        p.rotate(self.body.angle + sway + st.lean + digitacao_graus(st.at_desk, time.monotonic()))
         blink = 0.08 if time.monotonic() < st.blink_until else 1.0
         draw_face(p, st.shape, st.gaze, blink, st.emotion, carinho=st.feliz_fechado(), aparencia=self.aparencia)
         p.restore()
 
         if st.emotion == "dormindo":
             draw_zzz(p, CX + jitter_x, CY + jitter_y, time.monotonic(), self.aparencia.olho)
+        if time.monotonic() < st.exclamacao_until:         # quer sentar e o notebook está longe: um "!" só
+            p.setPen(self.aparencia.olho)
+            p.setFont(QFont("Consolas", 16, QFont.Bold))
+            p.drawText(QRectF(CX - 20, CY - BODY_H / 2 - 30, 40, 26), Qt.AlignCenter, "!")
 
         if st.show_label:
             p.setPen(self.aparencia.olho)
@@ -255,6 +271,8 @@ class PetWindow(QWidget):
             self._held_angle += step
         else:
             self.body.omega += step * 12.0
+            if abs(self.body.omega) >= WHEEL_DIZZY_OMEGA:      # rodou rápido demais: fica tonto, olhinhos rodando
+                self.state.dizzy_until = time.monotonic() + DIZZY_SECONDS
             if self.body.grounded:
                 self.body.jump(0.0, -250.0)
 
