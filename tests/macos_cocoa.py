@@ -89,13 +89,17 @@ def janelas():
         return {int(j["kCGWindowNumber"]) for j in lista or []}
 
     numeros = {nome: int(nativa.windowNumber()) for nome, nativa in nativas.items()}
+
+    # Capture o estado inicial apenas depois de ativar o app e esperar o WindowServer publicar as janelas.
+    # Antes disso, o NSPanel sem ajuste pode ainda não aparecer na lista OnScreenOnly, causando um falso
+    # negativo em `na_tela_antes` mesmo que a janela apareça corretamente quando o app ganha o foco.
+    nsapp = NSApplication.sharedApplication()
+    nsapp.activateIgnoringOtherApps_(True)
+    ativou = _esperar(app, nsapp.isActive)
     _esperar(app, lambda: set(numeros.values()) <= na_tela())
     antes = na_tela()
     proprias = [j for j, _rect, _max in macos.janelas_visiveis(set()) if j in numeros.values()]
 
-    nsapp = NSApplication.sharedApplication()
-    nsapp.activateIgnoringOtherApps_(True)
-    ativou = _esperar(app, nsapp.isActive)
     outro = _outro_programa(anterior)
     if ativou and outro is not None:
         if nsapp.respondsToSelector_("yieldActivationToApplication:"):     # macOS 14+: ativação cooperativa
