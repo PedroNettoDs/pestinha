@@ -8,6 +8,7 @@ Objetos que aparecem na tela: post-its, memes, cartazes, notebook, fogos e a jan
 
 | Arquivo | O que faz |
 |---|---|
+| `alfred_objetos.py` | ALFRED (objetos) - o que aparece na tela quando o pet encena o trabalho do Alfred. |
 | `arrastavel.py` | Janela arrastável que flutua sobre a área de trabalho (painéis, notebook, placa). |
 | `cartazes.py` | Os cartazes e a bandeira que o pet levanta. |
 | `fireworks.py` | O fogo de artifício do bichinho feliz. |

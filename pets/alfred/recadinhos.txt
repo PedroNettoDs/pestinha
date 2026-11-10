@@ -1,0 +1,14 @@
+# Recadinhos do Alfred. Um por linha. Linhas que começam com # são ignoradas.
+# Pode editar com ele rodando: ele relê o arquivo sozinho.
+o senhor já bebeu água hoje?
+o chá esfriou. de novo.
+recomendo salvar o arquivo, senhor.
+tomei a liberdade de observar. só observar.
+uma pausa de cinco minutos lhe faria bem.
+a postura, senhor. as costas agradecem.
+está tudo em ordem. por enquanto.
+se precisar, estou por aqui.
+devo lembrar que já passa da hora?
+a caixa de entrada não vai se ler sozinha. ou vai.
+muito bem, senhor. continue.
+permita-me sugerir: uma coisa de cada vez.

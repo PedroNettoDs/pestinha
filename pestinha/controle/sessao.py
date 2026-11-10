@@ -67,6 +67,7 @@ class SessaoMixin:
             self.clear_things()                      # travessuras desligadas: o que estava na tela sai
         self.mesa.set_visible(visible)
         self.castigo.set_visible(visible)
+        self.alfred.set_visible(visible)
         if not visible:
             self.revolucao.esconder()
         self.floats.sync(self.floats_allowed(), self.floats_base())
@@ -199,6 +200,7 @@ class SessaoMixin:
             self.mesa.fechar()
             self.festa.fechar()
             self.revolucao.fechar()
+            self.alfred.fechar()
             if not self.wiping:
                 self.protest_ctl.drop_sign()
                 self.sad_ctl.drop_sign()

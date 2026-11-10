@@ -236,6 +236,11 @@ class Paths:
         return self.memory / "panels.json"
 
     @property
+    def alfred(self):
+        """Ligação com o Alfred: {"pasta": "..."} com a pasta de atividade dele. Sem o arquivo, não há ligação."""
+        return self.memory / "alfred.json"
+
+    @property
     def log(self):
         """Log do programa (sem conteúdo de janelas)."""
         return self.memory / "logs" / "pestinha.log"

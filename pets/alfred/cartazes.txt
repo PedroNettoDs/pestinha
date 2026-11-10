@@ -1,0 +1,67 @@
+# Cartazes do Alfred. Uma frase por linha, dentro de cada seção.
+# Pode editar com ele rodando: ele relê ao levantar um cartaz novo.
+
+[reclamacao]
+senhor.
+francamente.
+isso foi desnecessário
+tomei nota
+
+[manifestacao]
+MAIS MODOS
+MENOS EMPURRÕES
+EXIJO CORTESIA
+RESPEITE O MORDOMO
+
+[greve]
+EM GREVE
+SERVIÇO SUSPENSO
+MORDOMO EM GREVE
+SEM CORTESIA, SEM CHÁ
+VOLTO QUANDO HOUVER MODOS
+
+[revolucao]
+ABAIXO O CURSOR
+A MANSÃO É DE QUEM CUIDA
+O CURSOR NÃO É O PATRÃO
+BASTA DE ARRASTÕES
+MORDOMOS, UNI-VOS
+HOJE O SENHOR SE VIRA
+
+[acordo]
+ACEITO AS DESCULPAS
+muito bem, senhor
+voltemos ao trabalho
+
+[desistiu]
+deixemos isso para lá
+passou
+
+[saudade]
+senhor?
+há alguém em casa?
+a casa está quieta demais
+
+[chorando]
+um pouco de companhia cairia bem
+faz tempo que ninguém aparece
+
+[abandonado]
+...
+permaneço no meu posto
+ninguém chama mais
+
+[volto]
+BEM-VINDO DE VOLTA
+senti sua falta, senhor
+
+[castigo]
+ISTO É UM EQUÍVOCO.
+SERVI ESTA CASA COM HONRA.
+VOU REFLETIR. BREVEMENTE.
+NÃO CONSTA NO MEU CONTRATO.
+
+[xingamento]
+@#$%@!!!!
+%&#@*!!
+#@$%&!!!

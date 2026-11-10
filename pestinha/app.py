@@ -62,6 +62,7 @@ from .core.homeostasis import Drives
 from .core.nervous_system import LIFBrain
 from .core.protesto import Protesto
 from .log import log
+from .mind.alfred_ctl import AlfredController
 from .mind.castigo_ctl import CastigoController
 from .mind.festa import FestaController
 from .mind.mesa import MesaController, pull
@@ -181,6 +182,9 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         self.castigo = CastigoController(self, self.debugging)
         paper = load_sprite(self.conteudo.bolinha_papel)
         self.revolucao = RevolucaoController(self.behavior.play, self.debugging, sprite=paper)
+        self.alfred = AlfredController(self, self.debugging)
+        if self.alfred.ligado:
+            self.floats.opened.add("alfred")    # a fila do Alfred fica na tela enquanto você não fechar
 
         # ----- reflexos e medições -----
         self.in_flight = False      # voando depois de um arremesso
@@ -299,6 +303,7 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         exclude |= {int(w.winId()) for w in self.revolucao.janelas()}
         exclude |= {int(w.winId()) for w in self.protest_ctl.sign_windows()}
         exclude |= {int(w.winId()) for w in self.sad_ctl.sign_windows()}
+        exclude |= {int(w.winId()) for w in self.alfred.janelas()}
         if self.ball.isVisible():
             exclude.add(int(self.ball.winId()))
         above = []
@@ -401,7 +406,8 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
             self.senses.kick("TOY_TAKEN", 0.9)
         intensities["TOY_NEAR"] = near if self.perms["bolinha"] and not self.ball_stored else 0.0
         # sinais de estado: o pedido seu, o cantinho, a memória de fugas e a recusa
-        intensities["PEDIDO"] = self.mesa.intensidade_pedido(now)
+        self.alfred.tick(now)
+        intensities["PEDIDO"] = max(self.mesa.intensidade_pedido(now), self.alfred.pedido())
         intensities.update(self.castigo.sinais(body))  # preso, memória de fuga, placa, visita, receio, rancor
         intensities["RECUSA"] = self.pulso_recusa
         self.pulso_recusa = 0.0
@@ -510,7 +516,8 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         else:
             self.sad_ctl.drop_sign()
         self.protest_ctl.carry(now, self.asleep or preso)
-        ball_bounds = self._bounds_at(areas, self.ball.body.x, self.ball.body.y)
+        self.alfred.act(now, dt, bounds)
+        ball_bounds =self._bounds_at(areas, self.ball.body.x, self.ball.body.y)
         self.ball.step(dt, ball_bounds, areas, monitores)
         self.revolucao.tick(
             now, dt, bounds, cursor, self.cursor_vel, self.pet.body, self.pet.isVisible(),
