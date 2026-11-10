@@ -15,6 +15,12 @@ Cada item é procurado primeiro na pasta do pet e depois aqui. Então um persona
 própria bolinha, por exemplo, só colocando um bolinha_papel.png em pets/<pet>/.
 Frases e memes NUNCA vêm da pasta de outro personagem.
 
+programas.json lista programas que o pet ainda não reconhece, somados aos que ele já conhece.
+Use o nome do processo, como aparece no Gerenciador de Tarefas. Vale ao reabrir. Exemplo:
+
+    "PROGRAMMING": ["meueditor.exe"],
+    "GAMING": ["meujogo.exe"]
+
 PNG com fundo transparente fica mais bonito. Tamanho não importa: ele reduz.
 Imagem que não abre (arquivo corrompido ou formato estranho) é ignorada.
 
