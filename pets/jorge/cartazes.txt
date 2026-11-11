@@ -94,3 +94,21 @@ TODO GRANDE CEO JÁ FICOU NO CANTINHO.
 $$$#@&!!!
 #@$%&... SINERGIA!
 @!#$% DE MERCADO!!
+
+# Dever: você deixou vencer o que prometeu (só aparece com o Alfred ligado: é ele quem informa).
+[pigarro]
+tem boleto vencendo aí.
+prazo é mindset.
+
+[sarcasmo]
+PROCRASTINAR NÃO ESCALA.
+QUEM ADIA NÃO FATURA.
+SEU PRAZO VENCEU. O MEU CURSO NÃO.
+
+[bracos_cruzados]
+SEM ENTREGA, SEM MENTORIA.
+VOLTO QUANDO VOCÊ CUMPRIR.
+
+[cumprido]
+ISSO É EXECUÇÃO.
+ENTREGOU. AGORA ESCALA.

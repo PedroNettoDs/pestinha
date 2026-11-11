@@ -12,6 +12,12 @@ O Pestinha roda só no seu computador. Ele não envia nada para a internet.
 - A posição e o tamanho das janelas abertas, para ele poder pousar nas barras de título.
 - No KDE Plasma com Wayland, essas leituras vêm de um script do KWin (`pestinha/plataforma/kwin_ponte.js`)
   que só existe enquanto o pet está aberto e manda geometria, pid e estado das janelas, nunca títulos.
+- Só se você criar `memory/alfred.json`: o arquivo `estado.json` da pasta indicada ali, onde o assistente
+  Alfred (outro programa deste computador) publica o que está fazendo, a fila e os avisos dele. O título de
+  um aviso aparece na tela, num balão e num post-it. Os pedidos que você faz pela fila são gravados em
+  `pedidos/`, nessa mesma pasta. Nada disso passa pela rede. Quando você clica em "Conversar" ou "Abrir
+  terminal", o pet abre no navegador um endereço que o Alfred publicou; só endereços deste computador
+  (`127.0.0.1` ou `localhost`) são aceitos. Veja [docs/ALFRED.md](docs/ALFRED.md).
 
 Ele **não** lê o conteúdo nem o título de nenhuma janela, página, documento ou conversa.
 
@@ -28,6 +34,7 @@ Do app e seu, direto em `memory/`:
 | `permissions.json` | As opções que você escolheu |
 | `timeline.csv` | Uma linha por minuto: hora, categoria de programa, trocas de janela, ocioso. Só com "Registrar minha rotina" ligado, que vem desligado. O pet ainda não usa esse histórico |
 | `panels.json` | Posição dos painéis, do notebook e da placa |
+| `alfred.json` | Só se você criar: a pasta de atividade do Alfred (`{"pasta": "..."}`) |
 | `logs/pestinha.log` | Mensagens do programa e erros inesperados (sem conteúdo de janelas) |
 
 De cada personagem, em `memory/pets/<pet>/` (um personagem não lê a memória do outro):

@@ -21,6 +21,8 @@ GLANCE_EVERY = 1.2          # s: a cada olhada, decide se fixa o cursor ou olha 
 
 LOOK_SECONDS = 2.5          # quanto tempo ele encara a janela que você acabou de abrir
 MAX_CLIMB = 800             # px: altura máxima de um pulo até uma janela
+CHANCE_JANELA_DA_FRENTE = 0.7   # ao subir, prefere a janela da frente (a que você está usando e ele observa)
+CHANCE_DESCER = 0.2             # em cima de uma janela, chance de o passeio sair pela beirada (ele desce)
 
 CURIOUS_DISTANCE = 170      # o curioso chega perto do cursor, mas não em cima
 DELIVER_TIMEOUT = 14.0
@@ -270,6 +272,7 @@ class Behavior:
         if now >= self.next_roam and not self.crossing_screen:
             self.next_roam = now + random.uniform(*prof["roam_interval"]) * tone.roam_scale()
             self.target_x = self._pick_target(cursor, left, right)
+            self._ficar_na_janela(platforms)
             self.crossing_screen = bool(
                 self.target_x is not None and not (left + 80 <= self.target_x <= right - 80)
             )
@@ -359,6 +362,15 @@ class Behavior:
                 vizinhos.append((a_left, a_right))
         return vizinhos
 
+    def _ficar_na_janela(self, platforms):
+        """Em cima de uma janela, o passeio fica dentro da barra de título; de vez em quando ele sai pela beirada."""
+        plat = next((p for p in platforms if p[0] == self.body.platform), None)
+        if plat is None or self.target_x is None or random.random() < CHANCE_DESCER:
+            return
+        ex = self.body.extents()[0]
+        lo, hi = plat[1] + ex, plat[2] - CLOSE_BUTTONS - ex
+        self.target_x = min(hi, max(lo, self.target_x)) if lo < hi else None
+
     def _jump_to_window(self, platforms):
         """Pulo balístico até a barra de título de uma janela próxima."""
         body = self.body
@@ -373,10 +385,11 @@ class Behavior:
                 continue
             tx = min(hi, max(lo, body.x + random.uniform(-200, 200)))
             if abs(tx - body.x) < 1400:
-                options.append((tx, p_top))
+                options.append((tx, p_top, hwnd))
         if not options:
             return False
-        tx, p_top = random.choice(options)
+        frente = [o for o in options if o[2] == platforms[0][0]]     # as plataformas vêm de cima para baixo
+        tx, p_top, _hwnd = random.choice(frente if frente and random.random() < CHANCE_JANELA_DA_FRENTE else options)
         apex = min(bottom, p_top) - 70
         t_up = math.sqrt(2 * (bottom - apex) / GRAVITY)
         t_down = math.sqrt(2 * (p_top - apex) / GRAVITY)

@@ -209,3 +209,31 @@ def test_no_wayland_nativo_o_app_avisa_e_nao_abre(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["main.py", "--direto"])
     assert main_mod.main() == 1
     assert abriu == [] and "XWayland" in avisos[0]
+
+
+def _bruta(janela_id, **campos):
+    base = {"id": janela_id, "pid": 2222, "area": 0, "tipo": "_NET_WM_WINDOW_TYPE_NORMAL", "estados": [],
+            "x": 100, "y": 200, "largura": 800, "altura": 600, "moldura": (0, 0, 0, 0), "sombra": (0, 0, 0, 0)}
+    return {**base, **campos}
+
+
+def test_x11_so_o_que_esta_na_tela_na_ordem_e_com_a_barra_de_titulo():
+    brutas = [
+        _bruta(1, moldura=(0, 0, 28, 0)),                                   # barra do gerenciador: o topo sobe 28
+        _bruta(2, sombra=(16, 16, 10, 32)),                                 # barra própria (GTK): tira a sombra
+        _bruta(3, estados=["_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"]),
+        _bruta(4, estados=["_NET_WM_STATE_HIDDEN"]),                        # minimizada
+        _bruta(5, tipo="_NET_WM_WINDOW_TYPE_DESKTOP", area=linux.TODAS_AS_AREAS),
+        _bruta(6, tipo="_NET_WM_WINDOW_TYPE_DOCK", area=linux.TODAS_AS_AREAS),
+        _bruta(7, area=1),                                                  # outra área de trabalho
+        _bruta(8, pid=4444),                                                # o próprio pet
+        _bruta(9),                                                          # excluída pelo app
+        _bruta(10, largura=80, altura=40),                                  # pequena
+        _bruta(11, area=linux.TODAS_AS_AREAS),                              # fixada em todas as áreas
+    ]
+    assert linux.escolher_janelas(brutas, 0, meu_pid=4444, excluir={9}) == [
+        (1, (100, 172, 900, 800), False),
+        (2, (116, 210, 884, 768), False),
+        (3, (100, 200, 900, 800), True),
+        (11, (100, 200, 900, 800), False),
+    ]

@@ -34,7 +34,8 @@ ENGAGED_RISE_S = 20.0       # tempo para chegar a esse nível
 # quanto cada acontecimento estimula (+) e satisfaz o contato (-)
 STIMULUS = {"app": 0.08, "novelty": 0.2, "poke": 0.15, "drag": 0.2, "throw": 0.35,
             "mischief": 0.25, "caress": 0.05}
-CONTACT = {"poke": 0.15, "drag": 0.1, "throw": 0.1, "caress": 0.25, "dismiss": 0.05}
+CONTACT = {"poke": 0.15, "drag": 0.1, "throw": 0.1, "caress": 0.25, "dismiss": 0.05,
+           "alfred": 0.5}      # você usou o Alfred (Painel, conversa, WhatsApp): ele foi notado
 
 
 class Drives:

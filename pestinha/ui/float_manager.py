@@ -8,10 +8,12 @@ A bandeja pode esconder ou mostrar; o tamanho e a posição ficam salvos (paths.
 
 from PySide6.QtGui import QGuiApplication
 
+from .fila_alfred import FilaAlfred
 from .monitor import NeuralMonitor
 from .panel import StrikePanel
 
-KEYS = ("neural", "greve")
+KEYS = ("neural", "greve", "alfred")
+AUTOMATICOS = ("neural", "greve")       # os que o modo teste deixa sempre na tela
 
 
 class FloatManager:
@@ -29,6 +31,8 @@ class FloatManager:
             screen = QGuiApplication.primaryScreen().availableGeometry()
             if key == "neural":
                 self.windows[key] = NeuralMonitor(self.app, (screen.x() + 20, screen.y() + 20))
+            elif key == "alfred":
+                self.windows[key] = FilaAlfred(self.app, (screen.x() + 20, screen.y() + 20))
             else:
                 self.windows[key] = StrikePanel(self.app, (screen.right() - 600, screen.y() + 40))
         return self.windows[key]
@@ -40,7 +44,8 @@ class FloatManager:
         """
         for key in KEYS:
             # abertos à mão aparecem sempre; os automáticos (modo teste) obedecem à bandeja
-            shown = base and (key in self.opened or (automatic and not self.hidden_by_tray))
+            shown = base and (key in self.opened
+                              or (automatic and key in AUTOMATICOS and not self.hidden_by_tray))
             if shown:
                 self.window(key).show()
             elif key in self.windows:
