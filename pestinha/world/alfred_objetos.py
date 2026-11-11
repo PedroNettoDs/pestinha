@@ -7,6 +7,8 @@ de recado) recebe: arrastar move, clicar abre o detalhe e o botão do meio fecha
 janelas, para não atrapalhar.
 """
 
+import time
+
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPolygonF
 
@@ -14,7 +16,7 @@ from .objetos import NOTE_SIZE, NoteThing, Thing
 
 ICONES = {
     "email": "✉️", "briefing_matinal": "📰", "briefing_vespertino": "📰", "rag": "📚", "vigia": "🔦",
-    "backup": "📦", "podcast": "🎙️", "conversas": "🗂️", "pendencia": "📌",
+    "backup": "📦", "podcast": "🎙️", "conversas": "🗂️", "pendencia": "📌", "remedio": "💊",
 }
 ICONE_PADRAO = "⚙️"
 
@@ -121,14 +123,18 @@ class AnotacaoThing(NoteThing):
     fechada = Signal(object)    # você clicou com o botão do meio
     movida = Signal(object)     # você soltou depois de arrastar
 
-    def __init__(self, texto, detalhe="", pergunta=False):
+    def __init__(self, texto, detalhe="", pergunta=False, quando=None, tomar=False):
         """Monta o post-it fechado; `detalhe` é o texto a mais que aparece ao clicar. Com `pergunta`, o Feito
-        pergunta antes se é para encerrar também no Alfred."""
+        pergunta antes se é para encerrar também no Alfred. `quando` (epoch) é a hora em que o Alfred o criou:
+        fica escrita na faixa de cima. Com `tomar` (dose de remédio), o botão é Tomei e avisa o Alfred direto."""
         super().__init__(texto)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
         self.setWindowFlag(Qt.WindowStaysOnBottomHint, True)
         self.detalhe = detalhe
         self.pergunta = pergunta
+        self.quando = quando
+        self.carimbo = time.strftime("%d/%m %H:%M", time.localtime(quando)) if quando else ""
+        self.tomar = tomar
         self.perguntando = False    # o Feito já foi clicado e os botões agora são Sim e Não
         self.aberta = False
         self._pego = None           # (onde o mouse apertou, centro do post-it naquela hora)
@@ -194,7 +200,7 @@ class AnotacaoThing(NoteThing):
                 self.perguntando = True             # os botões viram Sim e Não
                 self.update()
             else:
-                self.feito.emit(self, self.perguntando)     # Sim: encerra também no Alfred
+                self.feito.emit(self, self.perguntando or self.tomar)     # Sim ou Tomei: encerra também no Alfred
         elif self.botoes()["voltar"].contains(event.position()):
             if self.perguntando:
                 self.feito.emit(self, False)        # Não: só tira o post-it
@@ -216,6 +222,10 @@ class AnotacaoThing(NoteThing):
         p.drawRect(papel)
         p.setBrush(QColor("#f5d84f"))
         p.drawRect(QRectF(papel.left(), papel.top(), papel.width(), 14))
+        if self.carimbo:
+            p.setPen(QColor("#3a3320"))
+            p.setFont(QFont("Segoe Print", 7))
+            p.drawText(QRectF(papel.left(), papel.top(), papel.width() - 6, 14), Qt.AlignRight | Qt.AlignVCenter, self.carimbo)
         botoes = self.botoes()
         miolo = papel.adjusted(12, 22, -12, -(ANOTACAO_BOTAO + 18))
         titulo = QFont("Segoe Print", 11)
@@ -227,7 +237,7 @@ class AnotacaoThing(NoteThing):
         p.setFont(QFont("Segoe Print", 9))
         p.drawText(miolo.adjusted(0, usado.height() + 8, 0, 0), Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap,
                    PERGUNTA if self.perguntando else self.detalhe or "Sem mais detalhes.")
-        rotulos = ("Sim", "Não") if self.perguntando else ("Feito", "Voltar")
+        rotulos = ("Sim", "Não") if self.perguntando else ("Tomei" if self.tomar else "Feito", "Voltar")
         for nome, rotulo, cor in (("feito", rotulos[0], "#8fd694"), ("voltar", rotulos[1], "#f5d84f")):
             p.setPen(QPen(QColor("#3a3320"), 1))
             p.setBrush(QColor(cor))

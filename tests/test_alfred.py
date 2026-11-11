@@ -320,6 +320,42 @@ def test_recado_fica_colado_ate_ser_dispensado(app):
     assert app.alfred.recados_abertos == set()
 
 
+DOSE = {"id": "remedio:amoxicilina-1a2b:1762880700", "tipo": "remedio", "texto": "Tomar Amoxicilina", "link": "",
+        "detalhe": "Dose das 14:05 · a cada 8 h\nCuidados:\n• Não beber álcool",
+        "quando": time.mktime((2026, 11, 11, 14, 5, 0, 0, 0, -1))}
+
+
+def test_postit_leva_a_hora_em_que_foi_criado_e_volta_com_ela(tmp_path):
+    recado = {"id": "r1", "tipo": "recado", "texto": "Marina: pede orçamento", "link": "", "quando": DOSE["quando"] + 60}
+    antigo = {"id": "r2", "tipo": "recado", "texto": "Alfred de antes, sem hora", "link": ""}
+    aviso = {"id": "e1", "tipo": "pendencia", "texto": "Convite", "quando": DOSE["quando"] + 120}
+    app = _montar(tmp_path)
+    quadro(app, 10.0, recados=[DOSE, recado, antigo])
+    quadro(app, 12.0, recados=[DOSE, recado, antigo], eventos=[aviso])
+    carimbos = lambda a: ([a.recados[r["id"]].carimbo for r in (DOSE, recado, antigo)], a.notas[0].carimbo)
+    assert carimbos(app.alfred) == (["11/11 14:05", "11/11 14:06", ""], "11/11 14:07")
+    _fechar(app)
+    app = _montar(tmp_path)                                               # o pet reabre: nada foi lido do Alfred ainda
+    try:
+        assert carimbos(app.alfred) == (["11/11 14:05", "11/11 14:06", ""], "11/11 14:07")
+        assert app.alfred.recados[DOSE["id"]].tomar and not app.alfred.recados["r1"].tomar
+    finally:
+        _fechar(app)
+
+
+def test_postit_de_remedio_tem_tomei_e_avisa_o_alfred_sem_perguntar(app):
+    quadro(app, 10.0)
+    quadro(app, 12.0, recados=[DOSE], eventos=[{"id": "e1", "tipo": "remedio", "texto": DOSE["texto"], "quando": 2.0}])
+    assert app.alfred.balao.texto == "💊 Tomar Amoxicilina"
+    assert app.alfred.notas == [] and list(app.alfred.recados) == [DOSE["id"]]     # aviso e dose: um post-it só
+    nota = app.alfred.recados[DOSE["id"]]
+    assert nota.tomar and not nota.pergunta and "Não beber álcool" in nota.detalhe
+    nota.abrir(True)
+    _clicar(nota, "feito")                                                # o botão é Tomei: vai direto ao Alfred
+    assert app.alfred.recados == {}
+    assert pedidos(app.alfred.leitor.pasta) == [{"acao": "recado_feito", "id": DOSE["id"]}]
+
+
 def test_painel_da_fila_blocos_e_menus(app):
     fila = [{"id": "f1", "tipo": "backup", "rotulo": "Backup"}, {"id": "f2", "tipo": "email", "rotulo": "E-mails"}]
     quadro(app, 10.0, agora=[EMAIL], fila=fila,

@@ -125,14 +125,15 @@ class AlfredController:
         if evento["texto"] and self.app.perms["bilhetes"] and not e_recado:
             quando = time.strftime("%d/%m às %H:%M", time.localtime(evento["quando"])) if evento["quando"] else ""
             detalhe = f"{icone_de(evento['tipo'])} Aviso do Alfred" + (f", {quando}" if quando else "")
-            self.notas.append(self._nova_nota(evento["texto"], detalhe, len(self.notas)))
+            self.notas.append(self._nova_nota(evento["texto"], detalhe, len(self.notas), quando=evento["quando"]))
             for velha in self.notas[:-MAX_NOTAS]:
                 self._fechar_nota(velha)
             self._guardar()
 
-    def _nova_nota(self, texto, detalhe, deslocamento, rid=None, canto=None):
-        """Um post-it ao lado do pet, do lado com mais espaço (ou no `canto` guardado); `rid` é o recado dele."""
-        nota = AnotacaoThing(texto, detalhe, pergunta=rid is not None)
+    def _nova_nota(self, texto, detalhe, deslocamento, rid=None, canto=None, quando=None, tomar=False):
+        """Um post-it ao lado do pet, do lado com mais espaço (ou no `canto` guardado); `rid` é o recado dele,
+        `quando` a hora em que o Alfred o criou e `tomar` diz que é a dose de um remédio (botão Tomei)."""
+        nota = AnotacaoThing(texto, detalhe, pergunta=rid is not None and not tomar, quando=quando, tomar=tomar)
         if canto is None:
             body = self.app.pet.body
             left, top, right, _bottom = self.app.bounds()
@@ -156,7 +157,8 @@ class AlfredController:
         """Grava os post-its que estão na tela e os recados já dispensados, para a próxima abertura."""
         def item(nota, **mais):
             cx, cy = nota.canto()
-            return dict(texto=nota.text, detalhe=nota.detalhe, x=round(cx), y=round(cy), **mais)
+            return dict(texto=nota.text, detalhe=nota.detalhe, x=round(cx), y=round(cy), quando=nota.quando,
+                        tomar=nota.tomar, **mais)
         try:
             write_json(self.app.paths.alfred_notas, {
                 "notas": [item(n) for n in self.notas],
@@ -174,12 +176,16 @@ class AlfredController:
             lista = dados.get(nome) if isinstance(dados.get(nome), list) else []
             return [d for d in lista if isinstance(d, dict) and isinstance(d.get("texto"), str) and d["texto"]
                     and all(isinstance(d.get(k), (int, float)) for k in ("x", "y"))]
+        def quando(d):
+            return d["quando"] if isinstance(d.get("quando"), (int, float)) else None
         for d in itens("notas")[-MAX_NOTAS:]:
-            self.notas.append(self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0, canto=(d["x"], d["y"])))
+            self.notas.append(self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0, canto=(d["x"], d["y"]),
+                                              quando=quando(d)))
         for d in itens("recados"):
             if isinstance(d.get("id"), str) and d["id"] and d["id"] not in self.recados:
-                self.recados[d["id"]] = self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0,
-                                                        rid=d["id"], canto=(d["x"], d["y"]))
+                self.recados[d["id"]] = self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0, rid=d["id"],
+                                                        canto=(d["x"], d["y"]), quando=quando(d),
+                                                        tomar=d.get("tomar") is True)
         dispensados = dados.get("dispensados") if isinstance(dados.get("dispensados"), list) else []
         self.recados_abertos = {r for r in dispensados if isinstance(r, str)}
 
@@ -198,7 +204,8 @@ class AlfredController:
             for nota in [n for n in self.notas if n.text == recado["texto"]]:
                 self._fechar_nota(nota)             # o aviso do mesmo recado chegou antes: fica só um post-it
             self.recados[rid] = self._nova_nota(recado["texto"], recado["detalhe"],
-                                                len(self.notas) + len(self.recados), rid=rid)
+                                                len(self.notas) + len(self.recados), rid=rid,
+                                                quando=recado["quando"], tomar=recado["tipo"] == "remedio")
         if antes != (set(self.recados), len(self.notas), set(self.recados_abertos)):
             self._guardar()
 

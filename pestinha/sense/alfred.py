@@ -35,7 +35,8 @@ class Estado:
     agendadas: tuple = ()       # {tipo, rotulo, quando}
     catalogo: tuple = ()        # {tipo, rotulo}
     eventos: tuple = ()         # {id, tipo, texto, quando}
-    recados: tuple = ()         # {id, tipo, texto, link, detalhe}: o que espera você; link local, ou ""
+    recados: tuple = ()         # {id, tipo, texto, link, detalhe, quando}: o que espera você; link local, ou "";
+                                # tipo "remedio" é uma dose a tomar; quando = epoch em que foi criado, ou None
     links: dict = field(default_factory=dict)   # nome -> URL local (painel, conversa)
     notado: float | None = None     # quando você usou o Alfred pela última vez (epoch), ou None
     negligencia: dict | None = None     # {nivel 0..1, motivo, texto, link}: o que você deixou vencer, ou None
@@ -76,10 +77,10 @@ def _itens(bruto, nome, textos, numeros=()):
 
 
 def _recados(bruto):
-    """Os recados bem formados, cada um com o `detalhe` (texto mais longo) que veio junto, ou ""."""
+    """Os recados bem formados, cada um com o `detalhe` (texto mais longo) que veio junto, ou "", e `quando`."""
     brutos = [d for d in bruto.get("recados") or [] if isinstance(d, dict) and _texto(d.get("tipo"))] \
         if isinstance(bruto.get("recados"), list) else []
-    itens = _itens(bruto, "recados", ("id", "tipo", "texto", "link"))
+    itens = _itens(bruto, "recados", ("id", "tipo", "texto", "link"), ("quando",))
     return tuple(dict(item, detalhe=_texto(d.get("detalhe"), DETALHE_MAX)) for item, d in zip(itens, brutos))
 
 
