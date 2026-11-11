@@ -30,6 +30,7 @@ deixa você mexer na fila de rotinas dele. Sem `memory/alfred.json`, nada disto 
 
 | **Recados** | O que o Alfred lista em `recados` (hoje: quem deixou recado no número de WhatsApp dele) fica num post-it. Ele também some quando o Alfred tira o recado da lista. |
 | **Post-its** | Os de aviso e de recado: arrastar move; clicar abre o detalhe, com **Feito** (tira o post-it) e **Voltar**; só o botão do meio do mouse fecha. Ficam guardados em `memory/alfred_notas.json` e voltam ao mesmo lugar quando o pet reabre. Ficam atrás das outras janelas. No recado, o Feito pergunta "Encerrar também no Alfred?": só com **Sim** o pet deixa o pedido `recado_feito` e a pendência é fechada lá, sem resposta ao contato; com **Não**, ou pelo botão do meio, só o post-it sai. Passando de 12 avisos, o mais antigo sai. |
+| **Dever** | O Alfred informa em `negligencia` o que você deixou vencer (promessas e tarefas com prazo passado), com um nível de 0 a 1. A insatisfação do pet anda até esse nível (0 a 1 em 5 minutos) e ele levanta cartazes em três estágios: pigarro, sarcasmo (metade das vezes cita o que venceu) e braços cruzados (senta e para de encenar). Não há revolução. Carinho não alivia e fechar o cartaz não reprime: ele volta em 2 minutos. Só resolver a pendência faz passar (cai em 1 minuto e sai um cartaz de fim). A raiva passa na frente do dever, e o dever, da tristeza. Frases em `[pigarro]`, `[sarcasmo]`, `[bracos_cruzados]` e `[cumprido]` do `cartazes.txt` do pet. |
 | **Atenção** | Usar o Alfred (Painel, conversa, WhatsApp, fila) conta como atenção: o campo `notado` do retrato (horário do último uso) baixa a carência dele, como um carinho. Uso com mais de 60 s não conta; pausado, também não. |
 | **Solto num programa** | Solte o pet com a mão em cima da janela de um programa (arremesso não conta; só Linux X11). No **WordCraft** ele abre a Escrita do Alfred ao lado; no **Thunderbird** põe "Ler e classificar os e-mails" na frente da fila (a rotina também anota a agenda). A tabela é `PROGRAMAS` em `pestinha/mind/alfred_ctl.py`; a mesma ação só repete depois de 20 s. |
 | **Janelas** | Com "Pousar em janelas" ligado, ele sobe nas barras de título das janelas não maximizadas, prefere a da frente e passeia em cima dela. |
@@ -51,6 +52,8 @@ O Alfred grava `estado.json` na pasta de atividade; o pet só lê esse arquivo e
  "recados":   [{"id": "20261110-marina", "tipo": "recado", "texto": "Marina: pede orçamento",
                 "link": "http://127.0.0.1:7073/painel/pendencias/20261110-marina",
                 "detalhe": "Marina\n2026-11-10 14:32\nPede o orçamento do site até sexta."}],
+ "negligencia": {"nivel": 0.5, "motivo": "promessa", "texto": "Mandar o orçamento (Carlos), vencida há 1 dia",
+                 "link": "http://127.0.0.1:7073/painel/agenda"},
  "links":     {"painel": "http://127.0.0.1:7073/painel", "conversa": "http://127.0.0.1:7073/painel/conversa"}}
 ```
 
@@ -59,6 +62,7 @@ O Alfred grava `estado.json` na pasta de atividade; o pet só lê esse arquivo e
   `{"acao": "frente", "id": "…"}`, `{"acao": "cancelar", "id": "…"}`.
 - Itens malformados são descartados; textos são cortados em 120 caracteres.
 - `recados`: no máximo 6; `link` segue a mesma regra de `links` (fora dela, fica vazio); `detalhe` (opcional, até 600 caracteres) é o texto que o post-it mostra ao clicar.
+- `negligencia`: `null` ou ausente quando nada venceu. `nivel` fora de 0 a 1 é cortado; zero, negativo ou não numérico vale como ausente. `link` segue a regra de `links` (o pet ainda não o abre).
 - `links`: o pet só aceita `http://127.0.0.1` ou `http://localhost` (com porta e caminho simples) e só os
   abre quando você clica. O navegador é aberto pelo pet; nenhum comando vem do arquivo.
 

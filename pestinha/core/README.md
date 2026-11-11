@@ -15,4 +15,4 @@ Cérebro e regras puras: rede neural, emoção, homeostase, memória, condiciona
 | `motor.py` | A atividade dos neurônios motores controla o corpo DIRETAMENTE. |
 | `nervous_system.py` | A rede neural pulsada do pet (neurônios de integração e disparo com vazamento). |
 | `physics.py` | Corpo 2D do pet: gravidade, inércia, rotação, quique e pouso. |
-| `protesto.py` | A insatisfação do pet e o estágio em que ele está. |
+| `protesto.py` | A insatisfação do pet e o estágio em que ele está (raiva, tristeza e dever). |
