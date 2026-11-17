@@ -164,3 +164,30 @@ def test_pet_sem_conteudo_nao_herda_nada_do_outro(tmp_path, monkeypatch):
     tudo = [teste.conteudo.memes, teste.conteudo.notes, teste.conteudo.signs, teste.conteudo.bolinha_tenis,
             teste.conteudo.notebook, teste.conteudo.fotos]
     assert not any("bryan" in p.parts for p in tudo)
+
+
+def test_postit_nao_repete_na_tela_e_espera_um_tempo_sorteado(tmp_path, monkeypatch):
+    pet_cheio(Paths(root=tmp_path), "bryan")
+    pet_app = criar_app(tmp_path, monkeypatch, "bryan")
+    from pestinha.ajustes import BILHETE_ESPERA_MAX, BILHETE_ESPERA_MIN
+    from pestinha.world import mischief as mod
+    eng = pet_app.mischief
+    eng.notes.path.write_text("agua\npostura\n", encoding="utf-8")
+    agora = [1000.0]
+    monkeypatch.setattr(mod.time, "monotonic", lambda: agora[0])
+    primeiro = eng._make("bilhete", "feliz", small=False)
+    eng._add(primeiro)
+    espera = eng.proximo_bilhete - agora[0]
+    assert BILHETE_ESPERA_MIN <= espera <= BILHETE_ESPERA_MAX
+    assert "bilhete" not in eng.available("feliz", pet_app.perms)          # ainda esperando
+    agora[0] = eng.proximo_bilhete
+    assert "bilhete" in eng.available("feliz", pet_app.perms)
+    segundo = eng._make("bilhete", "feliz", small=False)
+    eng._add(segundo)
+    assert {primeiro.text, segundo.text} == {"agua", "postura"}           # o que está na tela não sai de novo
+    agora[0] = eng.proximo_bilhete
+    assert "bilhete" not in eng.available("feliz", pet_app.perms)          # as duas frases já estão na tela
+    assert eng._make("bilhete", "feliz", small=False) is None
+    eng._on_click(primeiro)
+    assert "bilhete" in eng.available("feliz", pet_app.perms)              # fechou uma: ela pode voltar
+    eng.clear()

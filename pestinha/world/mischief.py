@@ -16,7 +16,8 @@ from PySide6.QtCore import QObject, Signal
 
 from .. import config
 from .objetos import ImageThing, NoteThing
-from ..ajustes import TAMANHO_MEME as MEME_MAX, TAMANHO_MEME_CANTO as CORNER_MAX
+from ..ajustes import (BILHETE_ESPERA_MAX, BILHETE_ESPERA_MIN, TAMANHO_MEME as MEME_MAX,
+                       TAMANHO_MEME_CANTO as CORNER_MAX)
 
 CORNER_MARGIN = 18
 
@@ -33,6 +34,7 @@ class MischiefEngine(QObject):
         self.paths = conteudo                                 # ConteudoPaths: só o conteúdo deste pet e o comum
         self.notes = config.Notes(conteudo.notes)
         self.notes_sad = config.Notes(conteudo.notes_sad)       # bilhetes de quando ele está triste
+        self.proximo_bilhete = 0.0      # monotonic: antes disso, nada de post-it novo (espera sorteada)
 
     # ---------------- agenda ----------------
 
@@ -46,17 +48,25 @@ class MischiefEngine(QObject):
             return False
         return len(self.things) < prof["max_objects"]
 
+    def _na_tela(self):
+        """Textos dos post-its que já estão na tela (ou na mão do pet)."""
+        return {t.text for t in self.things if isinstance(t, NoteThing)}
+
+    def _pode_bilhete(self, notes):
+        """Diz se pode sair um post-it agora: a espera passou e há uma frase que ainda não está na tela."""
+        return time.monotonic() >= self.proximo_bilhete and notes.pick_possivel(self._na_tela())
+
     def available(self, emotion, perms, working=False):
         """Ações que as regras permitem agora (a memória escolhe entre elas)."""
         if emotion == "dormindo":
             return []                                   # dormindo, nem pensar
         if emotion == "triste":                         # triste só cola bilhetes tristes
-            return ["bilhete_triste", "nada"] if perms["bilhetes"] and self.notes_sad.has_lines() else []
+            return ["bilhete_triste", "nada"] if perms["bilhetes"] and self._pode_bilhete(self.notes_sad) else []
         if working:                                     # programando sem estar sentado: meme de trabalho
             trabalho = perms["memes"] and bool(config.list_images(self.paths.memes_trabalho))
             return ["meme_trabalho", "nada"] if trabalho else []
         memes = perms["memes"] and config.meme_for(self.paths.memes, emotion) is not None
-        notes = perms["bilhetes"] and bool(self.notes.lines or self.notes.pick())
+        notes = perms["bilhetes"] and self._pode_bilhete(self.notes)
         if emotion == "bravo":
             options = ((["meme_canto", "meme"] if memes else []) + (["bilhete_canto"] if notes else []))
             return options + ["nada"] if options else []
@@ -95,8 +105,10 @@ class MischiefEngine(QObject):
             thing = ImageThing(path, MEME_MAX) if path else None
         else:
             notes = self.notes_sad if kind == "bilhete_triste" else self.notes
-            text = notes.pick()
+            text = notes.pick(excluir=self._na_tela())
             thing = NoteThing(text, small=small) if text else None
+            if text:
+                self.proximo_bilhete = time.monotonic() + random.uniform(BILHETE_ESPERA_MIN, BILHETE_ESPERA_MAX)
         if thing is not None and not getattr(thing, "valida", True):
             thing.deleteLater()                      # imagem ilegível: nada de objeto invisível na tela
             return None

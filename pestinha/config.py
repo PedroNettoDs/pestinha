@@ -333,16 +333,18 @@ class Notes:
             if line.strip() and not line.lstrip().startswith("#")
         ]
 
-    def has_lines(self):
-        """Diz se há algum post-it disponível."""
+    def pick_possivel(self, excluir=()):
+        """Diz se há alguma frase fora de `excluir`."""
         self._reload()
-        return bool(self.lines)
+        return any(l not in excluir for l in self.lines)
 
-    def pick(self):
-        """Um post-it ao acaso, sem repetir o último quando há outros."""
+    def pick(self, excluir=()):
+        """Um post-it ao acaso, fora dos de `excluir` (os que já estão na tela) e sem repetir o último quando há
+        outros. None se não sobrar nenhum."""
         self._reload()
-        if not self.lines:
+        livres = [l for l in self.lines if l not in excluir]
+        if not livres:
             return None
-        options = [l for l in self.lines if l != self.last] or self.lines
+        options = [l for l in livres if l != self.last] or livres
         self.last = random.choice(options)
         return self.last
