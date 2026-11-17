@@ -13,7 +13,7 @@ ROOT =Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import pytest  # noqa: E402
-from PySide6.QtCore import QEvent, QPointF, Qt  # noqa: E402
+from PySide6.QtCore import QEvent, QPointF, QRect, Qt  # noqa: E402
 from PySide6.QtGui import QMouseEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -265,18 +265,69 @@ def _clicar(nota, botao):
     _mouse(nota, QEvent.MouseButtonRelease, Qt.LeftButton, (centro.x(), centro.y()), (500, 400))
 
 
-def test_feito_no_recado_so_encerra_no_alfred_com_sim(app):
+def test_feito_encerra_no_alfred_e_o_botao_do_meio_so_tira_o_postit(app):
     recados = [{"id": rid, "tipo": "recado", "texto": f"Recado {rid}", "link": ""} for rid in ("r1", "r2")]
     quadro(app, 10.0, recados=recados)
-    pasta = app.alfred.leitor.pasta
-    for rid, resposta in (("r1", "voltar"), ("r2", "feito")):             # os botões viram Não e Sim
-        nota = app.alfred.recados[rid]
+    quadro(app, 12.0, recados=recados, pendentes=[{"id": "p1", "texto": "Convite"}, {"id": "p2", "texto": "Outro"}],
+           eventos=[{"id": "e1", "tipo": "pendencia", "texto": "Convite", "quando": 2.0, "ref": "p1"},
+                    {"id": "e2", "tipo": "pendencia", "texto": "Outro", "quando": 2.0, "ref": "p2"}])
+    convite, outro = app.alfred.notas
+    app.alfred.recados["r1"].fechada.emit(app.alfred.recados["r1"])       # botão do meio: só o post-it sai
+    outro.fechada.emit(outro)
+    nota = app.alfred.recados["r2"]
+    nota.abrir(True)
+    _clicar(nota, "feito")
+    convite.abrir(True)
+    _clicar(convite, "feito")
+    assert app.alfred.recados == {} and app.alfred.notas == []
+    assert pedidos(app.alfred.leitor.pasta) == [{"acao": "recado_feito", "id": "p1"},
+                                                {"acao": "recado_feito", "id": "r2"}]
+
+
+def test_pendencia_resolvida_no_alfred_tira_o_postit_e_aviso_antigo_ganha_a_ref(app):
+    link = "http://127.0.0.1:7073/painel/pendencias/p1"
+    quadro(app, 10.0)
+    quadro(app, 12.0, eventos=[{"id": "e1", "tipo": "pendencia", "texto": "Convite", "quando": 2.0},
+                               {"id": "e2", "tipo": "remedio", "texto": "Fim do tratamento: X", "quando": 2.0}])
+    convite, fim = app.alfred.notas
+    assert convite.ref == "" and len(app.alfred.notas) == 2               # Alfred que não informa as pendentes: nada some
+    quadro(app, 14.0, pendentes=[{"id": "p1", "texto": "Convite", "link": link}])
+    assert (convite.ref, convite.link) == ("p1", link)                    # aviso sem ref: liga pelo título
+    quadro(app, 16.0, pendentes=[{"id": "p1", "texto": "Convite", "link": link}] * 100)
+    assert app.alfred.notas == [convite, fim]                             # lista cortada no limite: não conclui nada
+    quadro(app, 18.0, pendentes=[])
+    assert app.alfred.notas == [fim]                                      # resolvida lá: some aqui; o aviso solto fica
+    assert pedidos(app.alfred.leitor.pasta) == []
+
+
+def test_mais_detalhes_abre_o_item_no_painel(app, monkeypatch):
+    abertos = []
+    monkeypatch.setattr("pestinha.mind.alfred_ctl.QDesktopServices.openUrl", lambda url: abertos.append(url.toString()) or True)
+    link = "http://127.0.0.1:7073/painel/pendencias/p1"
+    quadro(app, 10.0)
+    quadro(app, 12.0, links={"painel": "http://127.0.0.1:7073/painel"}, pendentes=[{"id": "p1", "texto": "Convite"}],
+           eventos=[{"id": "e1", "tipo": "pendencia", "texto": "Convite", "quando": 2.0, "ref": "p1", "link": link},
+                    {"id": "e2", "tipo": "pendencia", "texto": "De fora", "quando": 2.0, "link": "http://exemplo.com/x"}])
+    for nota in app.alfred.notas:
         nota.abrir(True)
-        _clicar(nota, "feito")
-        assert nota.perguntando and rid in app.alfred.recados             # o Feito só pergunta
-        _clicar(nota, resposta)
-        assert rid not in app.alfred.recados
-    assert pedidos(pasta) == [{"acao": "recado_feito", "id": "r2"}]       # só o Sim chega ao Alfred
+        _clicar(nota, "detalhes")
+        assert nota.aberta and nota in app.alfred.notas                   # só abre o navegador: o post-it fica
+    assert abertos == [link, "http://127.0.0.1:7073/painel"]              # sem endereço local: o Painel
+
+
+def test_postit_passa_para_o_monitor_onde_o_meio_dele_cai(app, monkeypatch):
+    class Tela:
+        def availableGeometry(self):
+            return QRect(5000, 0, 1000, 800)
+    quadro(app, 10.0)
+    quadro(app, 12.0, eventos=[{"id": "e1", "tipo": "pendencia", "texto": "Convite", "quando": 2.0}])
+    nota = app.alfred.notas[0]
+    monkeypatch.setattr("pestinha.world.alfred_objetos.QGuiApplication.screenAt", lambda _ponto: Tela())
+    nota.por_canto(5400, 300)
+    assert nota.canto() == (5400, 300)                                    # fica no outro monitor
+    monkeypatch.setattr("pestinha.world.alfred_objetos.QGuiApplication.screenAt", lambda _ponto: None)
+    nota.por_canto(99999, 300)
+    assert nota.canto()[0] < 5000                                         # fora de qualquer monitor: fica no dele
 
 
 def test_postits_voltam_no_mesmo_lugar_ao_reabrir(tmp_path):
@@ -289,7 +340,7 @@ def test_postits_voltam_no_mesmo_lugar_ao_reabrir(tmp_path):
     app.alfred.notas[0].movida.emit(app.alfred.notas[0])
     app.alfred.recados["r1"].por_canto(520, 240)
     app.alfred.recados["r1"].movida.emit(app.alfred.recados["r1"])
-    app.alfred.recados["r2"].feito.emit(app.alfred.recados["r2"], False)
+    app.alfred.recados["r2"].fechada.emit(app.alfred.recados["r2"])
     _fechar(app)
     app = _montar(tmp_path)                                               # o pet reabre: nada foi lido do Alfred ainda
     try:
@@ -362,7 +413,7 @@ def test_postit_de_remedio_tem_tomei_e_avisa_o_alfred_sem_perguntar(app):
     assert app.alfred.balao.texto == "💊 Tomar Amoxicilina"
     assert app.alfred.notas == [] and list(app.alfred.recados) == [DOSE["id"]]     # aviso e dose: um post-it só
     nota = app.alfred.recados[DOSE["id"]]
-    assert nota.tomar and not nota.pergunta and "Não beber álcool" in nota.detalhe
+    assert nota.tomar and "Não beber álcool" in nota.detalhe
     nota.abrir(True)
     _clicar(nota, "feito")                                                # o botão é Tomei: vai direto ao Alfred
     assert app.alfred.recados == {}

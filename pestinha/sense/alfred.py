@@ -21,7 +21,7 @@ VERSAO = 1
 VALIDADE_S = 20.0       # retrato mais velho que isso: o Alfred está fora do ar
 TEXTO_MAX = 120
 DETALHE_MAX = 600       # o detalhe de um recado (o que o post-it mostra ao clicar)
-LIMITES = {"agora": 4, "fila": 20, "agendadas": 12, "catalogo": 30, "eventos": 10, "recados": 6}
+LIMITES = {"agora": 4, "fila": 20, "agendadas": 12, "catalogo": 30, "eventos": 10, "recados": 6, "pendentes": 100}
 # Só endereços desta máquina: é o que o pet aceita abrir no navegador.
 URL_LOCAL = re.compile(r"^http://(127\.0\.0\.1|localhost)(:\d{1,5})?(/[\w\-./]*)?$")
 
@@ -34,9 +34,10 @@ class Estado:
     fila: tuple = ()            # {id, tipo, rotulo}
     agendadas: tuple = ()       # {tipo, rotulo, quando}
     catalogo: tuple = ()        # {tipo, rotulo}
-    eventos: tuple = ()         # {id, tipo, texto, quando}
+    eventos: tuple = ()         # {id, tipo, texto, quando, ref, link}: ref = pendência do aviso (ou ""), link local
     recados: tuple = ()         # {id, tipo, texto, link, detalhe, quando}: o que espera você; link local, ou "";
                                 # tipo "remedio" é uma dose a tomar; quando = epoch em que foi criado, ou None
+    pendentes: tuple | None = None  # {id, texto, link}: as pendências ainda abertas no Alfred; None = ele não informa
     links: dict = field(default_factory=dict)   # nome -> URL local (painel, conversa)
     notado: float | None = None     # quando você usou o Alfred pela última vez (epoch), ou None
     negligencia: dict | None = None     # {nivel 0..1, motivo, texto, link}: o que você deixou vencer, ou None
@@ -84,6 +85,21 @@ def _recados(bruto):
     return tuple(dict(item, detalhe=_texto(d.get("detalhe"), DETALHE_MAX)) for item, d in zip(itens, brutos))
 
 
+def _local(link):
+    """O endereço, se for desta máquina; senão ""."""
+    return link if URL_LOCAL.match(link) else ""
+
+
+def _pendentes(bruto):
+    """As pendências abertas no Alfred ({id, texto, link}); None se o retrato não traz a lista."""
+    lista = bruto.get("pendentes")
+    if not isinstance(lista, list):
+        return None
+    itens = [{"id": _texto(d.get("id")), "texto": _texto(d.get("texto")), "link": _local(_texto(d.get("link")))}
+             for d in lista if isinstance(d, dict)]
+    return tuple(i for i in itens if i["id"])[:LIMITES["pendentes"]]
+
+
 def _links(bruto):
     """Só os links com nome e endereço local bem formados (http://127.0.0.1 ou localhost)."""
     links = bruto.get("links")
@@ -120,7 +136,9 @@ def interpretar(texto):
         agendadas=tuple(a for a in _itens(bruto, "agendadas", ("tipo", "rotulo"), ("quando",))
                         if a["quando"] is not None),
         catalogo=_itens(bruto, "catalogo", ("tipo", "rotulo")),
-        eventos=_itens(bruto, "eventos", ("id", "tipo", "texto"), ("quando",)),
+        eventos=tuple(dict(e, link=_local(e["link"]))
+                      for e in _itens(bruto, "eventos", ("id", "tipo", "texto", "ref", "link"), ("quando",))),
+        pendentes=_pendentes(bruto),
         recados=tuple(dict(r, link=r["link"] if URL_LOCAL.match(r["link"]) else "")
                       for r in _recados(bruto) if r["id"] and r["texto"]),
         links=_links(bruto),

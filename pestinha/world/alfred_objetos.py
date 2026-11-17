@@ -3,14 +3,14 @@ ALFRED (objetos) - o que aparece na tela quando o pet encena o trabalho do Alfre
 
 O balão em cima dele (a atividade e o andamento, ou uma fala) e o objeto que ele carrega (carta, livros,
 caixa). Nenhum dos dois recebe cliques: o que está embaixo continua clicável. A anotação (post-it de aviso ou
-de recado) recebe: arrastar move, clicar abre o detalhe e o botão do meio fecha. Ela fica atrás das outras
-janelas, para não atrapalhar.
+de recado) recebe: arrastar move (de um monitor a outro também), clicar abre o detalhe e o botão do meio fecha.
+Ela fica atrás das outras janelas, para não atrapalhar.
 """
 
 import time
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPolygonF
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPen, QPolygonF
 
 from .objetos import NOTE_SIZE, NoteThing, Thing
 
@@ -24,12 +24,10 @@ BALAO_LARGURA_MAX = 250
 BALAO_MARGEM = 10
 BALAO_BICO = 8              # px do bico que aponta para o pet
 BALAO_BARRA = 5             # px de altura da barra de andamento
-ANOTACAO_ABERTA = (300, 260)    # px do papel com o detalhe aberto
+ANOTACAO_ABERTA = (300, 300)    # px do papel com o detalhe aberto
 ANOTACAO_BORDA = 10         # px entre a janela e o papel (a sombra e a inclinação cabem aí)
-ANOTACAO_BOTAO = 30         # px de altura dos botões Feito e Voltar
+ANOTACAO_BOTAO = 30         # px de altura dos botões Mais detalhes, Feito e Voltar
 ARRASTE_MIN = 6             # px: menos que isso é clique, não arraste
-PERGUNTA = ("Encerrar também no Alfred?\n\nSim: a pendência é fechada lá, sem resposta ao contato.\n"
-            "Não: só o post-it sai; ela continua no Painel.")
 
 
 def icone_de(tipo):
@@ -117,25 +115,23 @@ class BalaoThing(Thing):
 
 
 class AnotacaoThing(NoteThing):
-    """Post-it do Alfred, atrás das outras janelas: arrastar move, clicar abre o detalhe (com Feito e Voltar) e
-    o botão do meio fecha."""
-    feito = Signal(object, bool)    # você clicou em Feito; o segundo valor diz se é para encerrar também no Alfred
+    """Post-it do Alfred, atrás das outras janelas: arrastar move, clicar abre o detalhe (com Mais detalhes,
+    Feito e Voltar) e o botão do meio fecha."""
+    feito = Signal(object)      # você clicou em Feito (ou Tomei): quem ouve encerra também no Alfred
+    detalhes = Signal(object)   # você clicou em Mais detalhes: quem ouve abre o item no Painel do Alfred
     fechada = Signal(object)    # você clicou com o botão do meio
     movida = Signal(object)     # você soltou depois de arrastar
 
-    def __init__(self, texto, detalhe="", pergunta=False, quando=None, tomar=False):
-        """Monta o post-it fechado; `detalhe` é o texto a mais que aparece ao clicar. Com `pergunta`, o Feito
-        pergunta antes se é para encerrar também no Alfred. `quando` (epoch) é a hora em que o Alfred o criou:
-        fica escrita na faixa de cima. Com `tomar` (dose de remédio), o botão é Tomei e avisa o Alfred direto."""
+    def __init__(self, texto, detalhe="", quando=None, tomar=False):
+        """Monta o post-it fechado; `detalhe` é o texto a mais que aparece ao clicar. `quando` (epoch) é a hora
+        em que o Alfred o criou: fica escrita na faixa de cima. Com `tomar` (dose de remédio), o botão é Tomei."""
         super().__init__(texto)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
         self.setWindowFlag(Qt.WindowStaysOnBottomHint, True)
         self.detalhe = detalhe
-        self.pergunta = pergunta
         self.quando = quando
         self.carimbo = time.strftime("%d/%m %H:%M", time.localtime(quando)) if quando else ""
         self.tomar = tomar
-        self.perguntando = False    # o Feito já foi clicado e os botões agora são Sim e Não
         self.aberta = False
         self._pego = None           # (onde o mouse apertou, centro do post-it naquela hora)
         self._arrastou = False
@@ -146,8 +142,10 @@ class AnotacaoThing(NoteThing):
         return self.x - self.width() / 2, self.y - self.height() / 2
 
     def por_canto(self, cx, cy):
-        """Põe o post-it com o canto em (cx, cy), sem deixar sair da tela."""
-        tela = self.screen().availableGeometry()
+        """Põe o post-it com o canto em (cx, cy), sem deixar sair da tela. A tela é a do monitor onde o meio
+        dele cai: arrastado para além da borda, ele passa para o monitor ao lado."""
+        meio = QPoint(int(cx + self.width() / 2), int(cy + self.height() / 2))
+        tela = (QGuiApplication.screenAt(meio) or self.screen()).availableGeometry()
         cx = min(max(cx, tela.left()), tela.right() - self.width())
         cy = min(max(cy, tela.top()), tela.bottom() - self.height())
         self.place(cx + self.width() / 2, cy + self.height() / 2)
@@ -156,17 +154,17 @@ class AnotacaoThing(NoteThing):
         """Abre o detalhe (papel maior, com os botões) ou volta ao post-it pequeno, no mesmo canto."""
         cx, cy = self.canto()
         self.aberta = aberta
-        self.perguntando = False
         self.note_w, self.note_h = ANOTACAO_ABERTA if aberta else NOTE_SIZE
         self.setFixedSize(self.note_w + 2 * ANOTACAO_BORDA, self.note_h + 2 * ANOTACAO_BORDA)
         self.por_canto(cx, cy)
         self.update()
 
     def botoes(self):
-        """Onde ficam os botões do detalhe: {"feito": QRectF, "voltar": QRectF}."""
+        """Onde ficam os botões do detalhe: {"detalhes": QRectF, "feito": QRectF, "voltar": QRectF}."""
         y = ANOTACAO_BORDA + self.note_h - ANOTACAO_BOTAO - 10
         largura = (self.note_w - 30) / 2
-        return {"feito": QRectF(ANOTACAO_BORDA + 10, y, largura, ANOTACAO_BOTAO),
+        return {"detalhes": QRectF(ANOTACAO_BORDA + 10, y - ANOTACAO_BOTAO - 8, self.note_w - 20, ANOTACAO_BOTAO),
+                "feito": QRectF(ANOTACAO_BORDA + 10, y, largura, ANOTACAO_BOTAO),
                 "voltar": QRectF(ANOTACAO_BORDA + 20 + largura, y, largura, ANOTACAO_BOTAO)}
 
     def mousePressEvent(self, event):
@@ -195,17 +193,12 @@ class AnotacaoThing(NoteThing):
             self.movida.emit(self)
         elif not self.aberta:
             self.abrir(True)
+        elif self.botoes()["detalhes"].contains(event.position()):
+            self.detalhes.emit(self)
         elif self.botoes()["feito"].contains(event.position()):
-            if self.pergunta and not self.perguntando:
-                self.perguntando = True             # os botões viram Sim e Não
-                self.update()
-            else:
-                self.feito.emit(self, self.perguntando or self.tomar)     # Sim ou Tomei: encerra também no Alfred
+            self.feito.emit(self)
         elif self.botoes()["voltar"].contains(event.position()):
-            if self.perguntando:
-                self.feito.emit(self, False)        # Não: só tira o post-it
-            else:
-                self.abrir(False)
+            self.abrir(False)
 
     def paintEvent(self, event):
         """Fechado, é o post-it de sempre; aberto, o papel maior com o texto, o detalhe e os botões."""
@@ -227,7 +220,7 @@ class AnotacaoThing(NoteThing):
             p.setFont(QFont("Segoe Print", 7))
             p.drawText(QRectF(papel.left(), papel.top(), papel.width() - 6, 14), Qt.AlignRight | Qt.AlignVCenter, self.carimbo)
         botoes = self.botoes()
-        miolo = papel.adjusted(12, 22, -12, -(ANOTACAO_BOTAO + 18))
+        miolo = papel.adjusted(12, 22, -12, -(2 * ANOTACAO_BOTAO + 26))
         titulo = QFont("Segoe Print", 11)
         titulo.setBold(True)
         p.setPen(QColor("#3a3320"))
@@ -236,9 +229,10 @@ class AnotacaoThing(NoteThing):
         p.drawText(miolo, Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap, self.text)
         p.setFont(QFont("Segoe Print", 9))
         p.drawText(miolo.adjusted(0, usado.height() + 8, 0, 0), Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap,
-                   PERGUNTA if self.perguntando else self.detalhe or "Sem mais detalhes.")
-        rotulos = ("Sim", "Não") if self.perguntando else ("Tomei" if self.tomar else "Feito", "Voltar")
-        for nome, rotulo, cor in (("feito", rotulos[0], "#8fd694"), ("voltar", rotulos[1], "#f5d84f")):
+                   self.detalhe or "Sem mais detalhes.")
+        for nome, rotulo, cor in (("detalhes", "Mais detalhes", "#fff6c2"),
+                                  ("feito", "Tomei" if self.tomar else "Feito", "#8fd694"),
+                                  ("voltar", "Voltar", "#f5d84f")):
             p.setPen(QPen(QColor("#3a3320"), 1))
             p.setBrush(QColor(cor))
             p.drawRoundedRect(botoes[nome], 5, 5)

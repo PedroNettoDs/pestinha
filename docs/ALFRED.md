@@ -29,8 +29,8 @@ deixa você mexer na fila de rotinas dele. Sem `memory/alfred.json`, nada disto 
 | **Avisos** | Pendência nova: "!" em cima dele, o título no balão por alguns segundos e um post-it (com "Deixar bilhetes" ligado). Fechar o post-it não conta como dispensa. |
 
 | **Recados** | O que o Alfred lista em `recados` (hoje: quem deixou recado no número de WhatsApp dele) fica num post-it. Ele também some quando o Alfred tira o recado da lista. |
-| **Post-its** | Os de aviso e de recado: arrastar move; clicar abre o detalhe, com **Feito** (tira o post-it) e **Voltar**; só o botão do meio do mouse fecha. Ficam guardados em `memory/alfred_notas.json` e voltam ao mesmo lugar quando o pet reabre. Ficam atrás das outras janelas. No recado, o Feito pergunta "Encerrar também no Alfred?": só com **Sim** o pet deixa o pedido `recado_feito` e a pendência é fechada lá, sem resposta ao contato; com **Não**, ou pelo botão do meio, só o post-it sai. Passando de 12 avisos, o mais antigo sai. A faixa de cima de cada post-it mostra dia e hora em que o Alfred o criou (`quando`), para distinguir dois iguais. |
-| **Remédio** | Recado de tipo `remedio` (dose vencida de um lembrete do Alfred): "!" e o nome no balão (💊), e um post-it "Tomar X" com os cuidados no detalhe. O botão é **Tomei**: sem perguntar, deixa o pedido `recado_feito` e o Alfred recomeça a contagem das horas. Pelo botão do meio só o post-it sai; a dose segue aberta no Alfred, que pergunta pelo WhatsApp. |
+| **Post-its** | Os de aviso e de recado: arrastar move, também de um monitor para outro; clicar abre o detalhe, com **Mais detalhes**, **Feito** e **Voltar**; só o botão do meio do mouse fecha. Ficam guardados em `memory/alfred_notas.json` e voltam ao mesmo lugar quando o pet reabre. Ficam atrás das outras janelas. **Mais detalhes** abre o item no Painel do Alfred (o `link`; sem ele, o Painel). **Feito** deixa o pedido `recado_feito` e a pendência é fechada também no Alfred, sem resposta ao contato; pelo botão do meio, só o post-it sai. A pendência resolvida no Alfred (Painel, WhatsApp, aplicativo) sai da lista `pendentes` e o post-it dela some sozinho. Passando de 12 avisos, o mais antigo sai. A faixa de cima de cada post-it mostra dia e hora em que o Alfred o criou (`quando`), para distinguir dois iguais. |
+| **Remédio** | Recado de tipo `remedio` (dose vencida de um lembrete do Alfred): "!" e o nome no balão (💊), e um post-it "Tomar X" com os cuidados no detalhe. O botão é **Tomei**: deixa o pedido `recado_feito` e o Alfred recomeça a contagem das horas. Pelo botão do meio só o post-it sai; a dose segue aberta no Alfred, que pergunta pelo WhatsApp. |
 | **Dever** | O Alfred informa em `negligencia` o que você deixou vencer (promessas e tarefas com prazo passado), com um nível de 0 a 1. A insatisfação do pet anda até esse nível (0 a 1 em 5 minutos) e ele levanta cartazes em três estágios: pigarro, sarcasmo (metade das vezes cita o que venceu) e braços cruzados (senta e para de encenar). Não há revolução. Carinho não alivia e fechar o cartaz não reprime: ele volta em 2 minutos. Só resolver a pendência faz passar (cai em 1 minuto e sai um cartaz de fim). A raiva passa na frente do dever, e o dever, da tristeza. Frases em `[pigarro]`, `[sarcasmo]`, `[bracos_cruzados]` e `[cumprido]` do `cartazes.txt` do pet. |
 | **Atenção** | Usar o Alfred (Painel, conversa, WhatsApp, fila) conta como atenção: o campo `notado` do retrato (horário do último uso) baixa a carência dele, como um carinho. Uso com mais de 60 s não conta; pausado, também não. |
 | **Solto num programa** | Solte o pet com a mão em cima da janela de um programa (arremesso não conta; só Linux X11). No **WordCraft** ele abre a Escrita do Alfred ao lado; no **Thunderbird** põe "Ler e classificar os e-mails" na frente da fila (a rotina também anota a agenda). A tabela é `PROGRAMAS` em `pestinha/mind/alfred_ctl.py`; a mesma ação só repete depois de 20 s. |
@@ -51,7 +51,10 @@ O Alfred grava `estado.json` na pasta de atividade; o pet só lê esse arquivo e
  "fila":      [{"id": "…", "tipo": "backup", "rotulo": "Backup"}],
  "agendadas": [{"tipo": "rag", "rotulo": "Indexar os cofres", "quando": 1794281749.5}],
  "catalogo":  [{"tipo": "email", "rotulo": "Ler e classificar os e-mails"}],
- "eventos":   [{"id": "…", "tipo": "pendencia", "texto": "Convite …", "quando": 1794281600.0}],
+ "eventos":   [{"id": "…", "tipo": "pendencia", "texto": "Convite …", "quando": 1794281600.0,
+                "ref": "20261110-convite", "link": "http://127.0.0.1:7073/painel/pendencias/20261110-convite"}],
+ "pendentes": [{"id": "20261110-convite", "texto": "Convite …",
+                "link": "http://127.0.0.1:7073/painel/pendencias/20261110-convite"}],
  "recados":   [{"id": "20261110-marina", "tipo": "recado", "texto": "Marina: pede orçamento",
                 "link": "http://127.0.0.1:7073/painel/pendencias/20261110-marina",
                 "detalhe": "Marina\n2026-11-10 14:32\nPede o orçamento do site até sexta."}],
@@ -65,6 +68,9 @@ O Alfred grava `estado.json` na pasta de atividade; o pet só lê esse arquivo e
   `{"acao": "frente", "id": "…"}`, `{"acao": "cancelar", "id": "…"}`.
 - Itens malformados são descartados; textos são cortados em 120 caracteres.
 - `recados`: no máximo 6; `link` segue a mesma regra de `links` (fora dela, fica vazio); `detalhe` (opcional, até 600 caracteres) é o texto que o post-it mostra ao clicar; `quando` (opcional, epoch) é a hora em que o Alfred criou o recado. `tipo` `"remedio"` é a dose de um remédio a tomar.
+- `eventos`: `ref` (opcional) é a pendência do aviso; `link` segue a regra de `links`.
+- `pendentes`: as pendências ainda abertas no Alfred, até 100. O post-it de aviso com `ref` fora da lista some; o
+  aviso sem `ref` ganha o da pendente de mesmo `texto`. Lista ausente, ou com 100 itens (pode estar cortada): nada some.
 - `negligencia`: `null` ou ausente quando nada venceu. `nivel` fora de 0 a 1 é cortado; zero, negativo ou não numérico vale como ausente. `link` segue a regra de `links` (o pet ainda não o abre).
 - `links`: o pet só aceita `http://127.0.0.1` ou `http://localhost` (com porta e caminho simples) e só os
   abre quando você clica. O navegador é aberto pelo pet; nenhum comando vem do arquivo.

@@ -6,8 +6,9 @@ atividade e o andamento, e ele se mexe conforme o tipo. Carrega objetos de um la
 (e-mails, notas, caixas), faz a ronda, ou vai até o notebook; aí quem decide sentar é o neurônio SENTAR,
 pelo sinal PEDIDO. Dormindo, de castigo, em protesto, de braços cruzados (dever) ou na sua mão, ele não encena. Um aviso do Alfred
 (pendência nova) vira uma fala no balão e um post-it; um recado também fica num post-it. Esses post-its se
-arrastam, ficam atrás das outras janelas, o clique abre o detalhe (com Feito e Voltar), só o botão do meio fecha, e eles voltam ao mesmo lugar
-quando o pet reabre (memory/alfred_notas.json). Usar o Alfred (Painel, conversa, WhatsApp, fila) conta como atenção: a carência
+arrastam (de um monitor a outro também), ficam atrás das outras janelas, o clique abre o detalhe (com Mais detalhes, Feito e Voltar), só o
+botão do meio fecha, e eles voltam ao mesmo lugar quando o pet reabre (memory/alfred_notas.json). Mais detalhes abre o item no Painel;
+Feito encerra a pendência também no Alfred, e a que é resolvida lá (Painel, WhatsApp, aplicativo) perde o post-it aqui. Usar o Alfred (Painel, conversa, WhatsApp, fila) conta como atenção: a carência
 dele diminui (`notado` no retrato). Solto com a mão em cima de um programa conhecido (PROGRAMAS), ele age:
 no WordCraft abre a Escrita, no Thunderbird manda ler os e-mails. Também abre no navegador os endereços locais que o Alfred
 publica: o Painel e a conversa com ele.
@@ -22,7 +23,7 @@ from PySide6.QtGui import QDesktopServices
 from .. import plataforma
 from ..ajustes import EXCLAMACAO_SEGUNDOS
 from ..log import log
-from ..sense.alfred import FORA_DO_AR, Leitor, pasta_do_alfred
+from ..sense.alfred import FORA_DO_AR, LIMITES, URL_LOCAL, Leitor, pasta_do_alfred
 from ..store import read_json, write_json
 from ..world.alfred_objetos import AnotacaoThing, BalaoThing, PropThing, icone_de
 
@@ -91,6 +92,7 @@ class AlfredController:
         for evento in novos:
             self._avisar(evento, now)
         self._colar_recados()
+        self._seguir_pendentes()
         self._sentir_notado()
         if trabalhava and self.atividade() is None:
             body = self.app.pet.body
@@ -125,16 +127,20 @@ class AlfredController:
         if evento["texto"] and self.app.perms["bilhetes"] and not e_recado:
             quando = time.strftime("%d/%m às %H:%M", time.localtime(evento["quando"])) if evento["quando"] else ""
             detalhe = f"{icone_de(evento['tipo'])} Aviso do Alfred" + (f", {quando}" if quando else "")
-            self.notas.append(self._nova_nota(evento["texto"], detalhe, len(self.notas), quando=evento["quando"]))
+            self.notas.append(self._nova_nota(evento["texto"], detalhe, len(self.notas), quando=evento["quando"],
+                                              ref=evento["ref"], link=evento["link"]))
             self._acordar()
             for velha in self.notas[:-MAX_NOTAS]:
                 self._fechar_nota(velha)
             self._guardar()
 
-    def _nova_nota(self, texto, detalhe, deslocamento, rid=None, canto=None, quando=None, tomar=False):
+    def _nova_nota(self, texto, detalhe, deslocamento, rid=None, canto=None, quando=None, tomar=False, ref="",
+                   link=""):
         """Um post-it ao lado do pet, do lado com mais espaço (ou no `canto` guardado); `rid` é o recado dele,
-        `quando` a hora em que o Alfred o criou e `tomar` diz que é a dose de um remédio (botão Tomei)."""
-        nota = AnotacaoThing(texto, detalhe, pergunta=rid is not None and not tomar, quando=quando, tomar=tomar)
+        `quando` a hora em que o Alfred o criou e `tomar` diz que é a dose de um remédio (botão Tomei). `ref` é a
+        pendência do aviso no Alfred ("" se não há) e `link`, o endereço dela no Painel (Mais detalhes)."""
+        nota = AnotacaoThing(texto, detalhe, quando=quando, tomar=tomar)
+        nota.ref, nota.link = ref, link
         if canto is None:
             body = self.app.pet.body
             left, top, right, _bottom = self.app.bounds()
@@ -143,11 +149,12 @@ class AlfredController:
         else:
             nota.por_canto(*canto)
         if rid is None:
-            nota.feito.connect(lambda nota, _encerrar: self._fechar_nota(nota))
+            nota.feito.connect(self._feito_aviso)
             nota.fechada.connect(self._fechar_nota)
         else:
-            nota.feito.connect(lambda _nota, encerrar, rid=rid: self._dispensar_recado(rid, encerrar))
+            nota.feito.connect(lambda _nota, rid=rid: self._dispensar_recado(rid, True))
             nota.fechada.connect(lambda _nota, rid=rid: self._dispensar_recado(rid))
+        nota.detalhes.connect(self._abrir_detalhes)
         nota.movida.connect(lambda _nota: self._guardar())
         nota.setVisible(self.visivel)
         return nota
@@ -164,7 +171,7 @@ class AlfredController:
         def item(nota, **mais):
             cx, cy = nota.canto()
             return dict(texto=nota.text, detalhe=nota.detalhe, x=round(cx), y=round(cy), quando=nota.quando,
-                        tomar=nota.tomar, **mais)
+                        tomar=nota.tomar, ref=nota.ref, link=nota.link, **mais)
         try:
             write_json(self.app.paths.alfred_notas, {
                 "notas": [item(n) for n in self.notas],
@@ -184,14 +191,17 @@ class AlfredController:
                     and all(isinstance(d.get(k), (int, float)) for k in ("x", "y"))]
         def quando(d):
             return d["quando"] if isinstance(d.get("quando"), (int, float)) else None
+        def link(d):
+            return d["link"] if isinstance(d.get("link"), str) and URL_LOCAL.match(d["link"]) else ""
         for d in itens("notas")[-MAX_NOTAS:]:
             self.notas.append(self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0, canto=(d["x"], d["y"]),
-                                              quando=quando(d)))
+                                              quando=quando(d), ref=d["ref"] if isinstance(d.get("ref"), str) else "",
+                                              link=link(d)))
         for d in itens("recados"):
             if isinstance(d.get("id"), str) and d["id"] and d["id"] not in self.recados:
                 self.recados[d["id"]] = self._nova_nota(d["texto"], str(d.get("detalhe") or ""), 0, rid=d["id"],
                                                         canto=(d["x"], d["y"]), quando=quando(d),
-                                                        tomar=d.get("tomar") is True)
+                                                        tomar=d.get("tomar") is True, link=link(d))
         dispensados = dados.get("dispensados") if isinstance(dados.get("dispensados"), list) else []
         self.recados_abertos = {r for r in dispensados if isinstance(r, str)}
 
@@ -211,14 +221,15 @@ class AlfredController:
                 self._fechar_nota(nota)             # o aviso do mesmo recado chegou antes: fica só um post-it
             self.recados[rid] = self._nova_nota(recado["texto"], recado["detalhe"],
                                                 len(self.notas) + len(self.recados), rid=rid,
-                                                quando=recado["quando"], tomar=recado["tipo"] == "remedio")
+                                                quando=recado["quando"], tomar=recado["tipo"] == "remedio",
+                                                link=recado["link"])
             self._acordar()
         if antes != (set(self.recados), len(self.notas), set(self.recados_abertos)):
             self._guardar()
 
     def _dispensar_recado(self, rid, encerrar=False):
         """Você marcou o recado como feito ou fechou o post-it (botão do meio): ele sai e não volta para a tela.
-        Com `encerrar` (o Sim do Feito), pede ao Alfred que feche a pendência também."""
+        Com `encerrar` (o Feito ou o Tomei), pede ao Alfred que feche a pendência também."""
         if encerrar:
             self.leitor.pedir("recado_feito", id=rid)
         self.recados_abertos.add(rid)
@@ -231,8 +242,38 @@ class AlfredController:
             nota.close()
             nota.deleteLater()
 
+    def _seguir_pendentes(self):
+        """Os avisos seguem as pendências do Alfred: a que foi resolvida lá (Painel, WhatsApp, aplicativo) perde o
+        post-it aqui. O aviso antigo, sem `ref`, ganha o da pendência aberta de mesmo título."""
+        pendentes = self.estado.pendentes
+        if not self.estado.online or pendentes is None:
+            return
+        abertas = {p["id"] for p in pendentes}
+        por_texto = {p["texto"]: p for p in pendentes}
+        completa = len(pendentes) < LIMITES["pendentes"]    # lista cortada: não dá para dizer que uma saiu
+        ligou = False
+        for nota in list(self.notas):
+            if not nota.ref and nota.text in por_texto:
+                nota.ref, nota.link = por_texto[nota.text]["id"], por_texto[nota.text]["link"]
+                ligou = True
+            elif nota.ref and completa and nota.ref not in abertas:
+                self._fechar_nota(nota)
+        if ligou:
+            self._guardar()
+
+    def _feito_aviso(self, nota):
+        """Feito no aviso: o post-it sai e, se ele é de uma pendência, o Alfred a encerra também."""
+        if nota.ref:
+            self.leitor.pedir("recado_feito", id=nota.ref)
+        self._fechar_nota(nota)
+
+    def _abrir_detalhes(self, nota):
+        """Mais detalhes: abre no navegador o item do post-it no Painel do Alfred (ou o Painel, se ele não tem endereço)."""
+        url = nota.link or self.estado.links.get("painel")
+        return bool(url) and QDesktopServices.openUrl(QUrl(url))
+
     def _fechar_nota(self, nota):
-        """Você marcou o aviso como feito ou fechou o post-it: ele some (não é travessura, não conta como dispensa)."""
+        """O aviso foi marcado como feito, fechado ou resolvido no Alfred: ele some (não é travessura, não conta como dispensa)."""
         if nota in self.notas:
             self.notas.remove(nota)
         nota.close()
