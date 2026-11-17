@@ -133,6 +133,9 @@ GANHO_PAPEL = 0.05              # bolinhas de papel por segundo, por Hz do motor
 LADO_JANELA_PET = 200         # px da janela transparente do corpo
 ZZZ_QUANTIDADE = 3
 ZZZ_PERIODO = 2.4               # s que cada Z leva para subir e sumir
+MADRUGADA = (0, 6)              # horas locais [início, fim): sem trabalho do Alfred, ele dorme
+OCIOSO_PARA_DORMIR = 3600.0     # s sem teclado nem mouse: ele dorme mesmo descansado
+VIGILIA_APOS_SUSTO = 600.0      # s acordado depois de ser acordado (cutucão, arrasto ou post-it do Alfred)
 
 # ---------------------------------------------------------------------------
 # Validação

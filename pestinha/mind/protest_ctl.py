@@ -43,13 +43,14 @@ class ProtestController:
 
     # ---------------- estágios ----------------
 
-    def tick(self, dt, tone, prof, caressing, now, lonely=0.0, negligencia=None):
+    def tick(self, dt, tone, prof, caressing, now, lonely=0.0, negligencia=None, dormindo=False):
         """Integra a intensidade do sentimento. Devolve (antigo, novo) quando o estágio muda."""
         if self.protest.kind == "dever":                 # segue o que o Alfred informa; sem Alfred, passa
             self.protest.motivo = negligencia["texto"] if negligencia else ""
             return self.protest.update(dt, 0.0, prof, False, now, alvo=negligencia["nivel"] if negligencia else 0.0)
         if self.protest.kind == "tristeza":
-            rate = tone.r["SAD"] + 0.5 * lonely          # triste + sozinho por muito tempo
+            # triste + sozinho por muito tempo; dormindo, a tristeza só passa
+            rate = 0.0 if dormindo else tone.r["SAD"] + 0.5 * lonely
             prof = dict(prof, grievance_up=prof["sad_up"], grievance_down=prof["sad_down"],
                         stage_up=prof["sad_stage_up"])
         else:

@@ -320,6 +320,19 @@ def test_recado_fica_colado_ate_ser_dispensado(app):
     assert app.alfred.recados_abertos == set()
 
 
+def test_postit_novo_do_alfred_acorda_o_pet(app):
+    recado = {"id": "r1", "tipo": "recado", "texto": "Marina: pede orçamento", "link": ""}
+    quadro(app, 10.0, recados=[recado])
+    app.sleep.asleep = True
+    quadro(app, 12.0, recados=[recado])
+    assert app.sleep.asleep                                                # post-it que já estava colado não acorda
+    quadro(app, 14.0, recados=[recado, {"id": "r2", "tipo": "recado", "texto": "Lembrete: dentista", "link": ""}])
+    assert not app.sleep.asleep                                            # recado novo: acorda
+    app.sleep.asleep = True
+    quadro(app, 16.0, recados=[recado], eventos=[{"id": "e9", "tipo": "aviso", "texto": "Backup pronto", "quando": 3.0}])
+    assert not app.sleep.asleep and [n.text for n in app.alfred.notas] == ["Backup pronto"]   # aviso novo: acorda
+
+
 DOSE = {"id": "remedio:amoxicilina-1a2b:1762880700", "tipo": "remedio", "texto": "Tomar Amoxicilina", "link": "",
         "detalhe": "Dose das 14:05 · a cada 8 h\nCuidados:\n• Não beber álcool",
         "quando": time.mktime((2026, 11, 11, 14, 5, 0, 0, 0, -1))}

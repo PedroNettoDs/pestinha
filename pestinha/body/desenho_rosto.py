@@ -1,5 +1,5 @@
 """
-DESENHO DO ROSTO - só o que se desenha do pet: moldura, olhos, brilho, acessórios e os Zzz.
+DESENHO DO ROSTO - só o que se desenha do pet: moldura, olhos, brilho, acessórios, a roupa de dormir e os Zzz.
 
 Não tem estado nem decisão: recebe a forma dos olhos, a direção do olhar e a aparência do pet
 (cores e acessórios, de pets/<pet>.json) e pinta. Os acessórios são uma camada por cima do rosto:
@@ -25,6 +25,8 @@ SHINE = QColor("#c8ffd8")
 ACESSORIOS = ("oculos", "gravata")
 COR_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 COR_PADRAO_ACESSORIO = {"oculos": "#e8e8e8", "gravata": "#b3261e"}
+PIJAMA = QColor("#3f7fe0")         # gorro e pijama de dormir
+PIJAMA_CLARO = QColor("#cfe2ff")   # listras, barra e pompom
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,9 @@ def draw_face(p, shape, gaze=(0.0, 0.0), blink=1.0, emotion="observando", carinh
     p.setPen(Qt.NoPen)
     p.setBrush(a.tela)
     p.drawRoundedRect(QRectF(-BODY_W / 2 + 11, -BODY_H / 2 + 11, BODY_W - 22, BODY_H - 22), 12, 12)
+    dormindo = emotion == "dormindo"
+    if dormindo:
+        _pijama(p)
     for nome, cor in a.acessorios:
         if nome == "gravata":                          # por cima da tela, sempre dentro do contorno do corpo
             _gravata(p, cor)
@@ -95,6 +100,8 @@ def draw_face(p, shape, gaze=(0.0, 0.0), blink=1.0, emotion="observando", carinh
     for nome, cor in a.acessorios:
         if nome == "oculos":
             _oculos(p, cor)
+    if dormindo:
+        _gorro(p)
 
 
 def _olhos(p, shape, gaze, blink, emotion, a):
@@ -181,6 +188,41 @@ def _gravata(p, cor):
                              QPointF(0, topo + 21), QPointF(-5.5, topo + 17)]))   # ponta
     p.setPen(QPen(escura, 1.5))
     p.drawLine(QPointF(-4, topo + 10), QPointF(4, topo + 8))                   # listra
+    p.restore()
+
+
+def _pijama(p):
+    """Pijama listrado por cima do corpo (moldura e casca); a tela, com os olhos, fica de fora."""
+    corpo = QPainterPath()
+    corpo.addRoundedRect(QRectF(-BODY_W / 2 - 2.5, -BODY_H / 2 - 2.5, BODY_W + 5, BODY_H + 5), 22, 22)
+    tela = QPainterPath()
+    tela.addRoundedRect(QRectF(-BODY_W / 2 + 11, -BODY_H / 2 + 11, BODY_W - 22, BODY_H - 22), 12, 12)
+    p.save()
+    p.setClipPath(corpo.subtracted(tela))
+    p.fillRect(QRectF(-BODY_W / 2 - 3, -BODY_H / 2 - 3, BODY_W + 6, BODY_H + 6), PIJAMA)
+    p.setPen(QPen(PIJAMA_CLARO, 2))
+    for x in range(-BODY_W // 2 + 4, BODY_W // 2, 12):
+        p.drawLine(QPointF(x, -BODY_H / 2 - 3), QPointF(x, BODY_H / 2 + 3))
+    p.restore()
+
+
+def _gorro(p):
+    """Gorro de dormir no topo da cabeça, com a ponta caída para a esquerda (os Zzz sobem pela direita)."""
+    topo = -BODY_H / 2
+    gorro = QPainterPath()
+    gorro.moveTo(32, topo - 3)
+    gorro.cubicTo(30, topo - 22, 12, topo - 37, -8, topo - 35)
+    gorro.cubicTo(-28, topo - 33, -46, topo - 26, -54, topo - 10)
+    gorro.cubicTo(-42, topo - 19, -35, topo - 17, -32, topo - 3)
+    gorro.closeSubpath()
+    p.save()
+    p.setPen(QPen(PIJAMA.darker(130), 1.5))
+    p.setBrush(PIJAMA)
+    p.drawPath(gorro)
+    p.setPen(Qt.NoPen)
+    p.setBrush(PIJAMA_CLARO)
+    p.drawRoundedRect(QRectF(-36, topo - 8, 72, 10), 5, 5)      # barra
+    p.drawEllipse(QPointF(-55, topo - 7), 6, 6)                 # pompom
     p.restore()
 
 

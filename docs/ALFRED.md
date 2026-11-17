@@ -38,6 +38,8 @@ deixa você mexer na fila de rotinas dele. Sem `memory/alfred.json`, nada disto 
 
 Dormindo, de castigo, em protesto ou na sua mão, ele não encena; o balão e a fila continuam informando.
 
+De madrugada (0h às 6h, `MADRUGADA` em `ajustes.py`), sem nada do Alfred em andamento nem na fila, ele dorme mesmo descansado, de gorro e pijama azuis. Também dorme depois de 1 h sem teclado nem mouse (`OCIOSO_PARA_DORMIR`). Dormindo, a carência não cresce e a tristeza só passa. Não acorda sozinho: só quando o Alfred cola um post-it (recado, dose de remédio ou aviso) ou quando você o acorda (cutucar, arrastar, arremessar). Acordado, fica 10 min de pé antes de voltar a dormir. Só o pet dorme: o balão, a fila e os post-its continuam.
+
 ## Contrato (arquivos, sem rede)
 
 O Alfred grava `estado.json` na pasta de atividade; o pet só lê esse arquivo e só grava em `pedidos/`.

@@ -126,6 +126,7 @@ class AlfredController:
             quando = time.strftime("%d/%m às %H:%M", time.localtime(evento["quando"])) if evento["quando"] else ""
             detalhe = f"{icone_de(evento['tipo'])} Aviso do Alfred" + (f", {quando}" if quando else "")
             self.notas.append(self._nova_nota(evento["texto"], detalhe, len(self.notas), quando=evento["quando"]))
+            self._acordar()
             for velha in self.notas[:-MAX_NOTAS]:
                 self._fechar_nota(velha)
             self._guardar()
@@ -150,6 +151,11 @@ class AlfredController:
         nota.movida.connect(lambda _nota: self._guardar())
         nota.setVisible(self.visivel)
         return nota
+
+    def _acordar(self):
+        """Post-it novo do Alfred: é a única coisa, além da sua mão, que acorda o pet."""
+        if self.app.asleep:
+            self.app.sleep.wake(startled=False)
 
     # ---------------- post-its guardados ----------------
 
@@ -206,6 +212,7 @@ class AlfredController:
             self.recados[rid] = self._nova_nota(recado["texto"], recado["detalhe"],
                                                 len(self.notas) + len(self.recados), rid=rid,
                                                 quando=recado["quando"], tomar=recado["tipo"] == "remedio")
+            self._acordar()
         if antes != (set(self.recados), len(self.notas), set(self.recados_abertos)):
             self._guardar()
 

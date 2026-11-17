@@ -45,7 +45,7 @@ from .ajustes import (
     RECOMPENSA_CARINHO as CARESS_REWARD,
     SILENCIO_MOUSE as MOUSE_QUIET,
 )
-from .ajustes import ALCANCE_NOTEBOOK, EXCLAMACAO_SEGUNDOS, LIMIAR_SENTAR_HZ
+from .ajustes import ALCANCE_NOTEBOOK, EXCLAMACAO_SEGUNDOS, LIMIAR_SENTAR_HZ, OCIOSO_PARA_DORMIR
 from .body.behavior import Behavior
 from .body.bolinha import Ball, load_sprite
 from .body.brincadeira import Play
@@ -69,7 +69,7 @@ from .mind.mesa import MesaController, pull
 from .mind.mischief_ctl import MischiefController
 from .mind.protest_ctl import ProtestController
 from .mind.revolucao import RevolucaoController
-from .mind.sleep import SleepController
+from .mind.sleep import SleepController, noite_de_sono
 from .paths import Paths
 from .sense import senses
 from .sense.timeline import TimelineRecorder
@@ -430,7 +430,7 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         if change:
             self.protest_ctl.on_stage(*change)
         sad_change = self.sad_ctl.tick(dt, st.tone, self.prof, caressing, now,
-                                       self.drives.channels()["LONELY"])
+                                       self.drives.channels()["LONELY"], dormindo=self.asleep)
         if sad_change:
             self.sad_ctl.on_stage(*sad_change)
         dever_change = self.dever_ctl.tick(dt, st.tone, self.prof, caressing, now,
@@ -474,7 +474,9 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
             self.emotion.force("contente", 0.5, now, PRIORITY["carinho"])     # fecha os olhinhos na hora
             self.timeline.note_interaction(dt)
 
-        self.sleep.tick(now, body, self.in_flight, self.protest.stage, self.behavior.mission)
+        self.sleep.tick(now, body, self.in_flight, self.protest.stage, self.behavior.mission,
+                        noite=(self.alfred.ligado and noite_de_sono(self.alfred.estado))
+                        or idle >= OCIOSO_PARA_DORMIR)
 
         emotion = self.emotion.update(motor, dt, self.prof)
         if self.protest.stage >= 2 and not self.asleep:

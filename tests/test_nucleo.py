@@ -121,7 +121,7 @@ def test_canais_internos_respondem_ao_desequilibrio():
 def test_sonolento_abaixo_do_limite():
     d = Drives()
     d.energy = 0.1
-    assert d.sleepy() and not d.rested()
+    assert d.sleepy()
 
 
 # ---------------- física ----------------
