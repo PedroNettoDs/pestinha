@@ -439,6 +439,11 @@ class AlfredController:
         url = self.estado.links.get("painel")
         return bool(url) and QDesktopServices.openUrl(QUrl(url))
 
+    def abrir_cobranca(self):
+        """Abre no navegador o item que o pet cobra (o `link` da negligência; sem ele, o Painel)."""
+        url = (self.estado.negligencia or {}).get("link") or self.estado.links.get("painel")
+        return bool(url) and QDesktopServices.openUrl(QUrl(url))
+
     def solto_em(self, x, y, now):
         """Você soltou o pet no ponto (x, y): conforme o programa da janela ali, ele age. Devolve a ação, ou None."""
         if not self.estado.online:

@@ -187,6 +187,7 @@ class PestinhaApp(SessaoMixin, InteracaoMixin, QObject):
         paper = load_sprite(self.conteudo.bolinha_papel)
         self.revolucao = RevolucaoController(self.behavior.play, self.debugging, sprite=paper)
         self.alfred = AlfredController(self, self.debugging)
+        self.dever_ctl.ao_cobrar = self.alfred.abrir_cobranca    # clique no cartaz do dever: o item no Painel
         if self.alfred.ligado:
             self.floats.opened.add("alfred")    # a fila do Alfred fica na tela enquanto você não fechar
 

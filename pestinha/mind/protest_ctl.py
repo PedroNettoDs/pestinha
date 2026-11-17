@@ -31,6 +31,7 @@ class ProtestController:
         self.state = state          # PetState: protest_stage é espelhado aqui
         self.debug = debug
         self.visivel = True         # o cartaz novo nasce com a visibilidade da sessão
+        self.ao_cobrar = None       # dever: chamado no clique do cartaz de cobrança (o app abre o item no Alfred)
 
     @property
     def stage(self):
@@ -85,6 +86,8 @@ class ProtestController:
         if self.protest.kind == "dever":
             if self.protest.stage:                  # "como queira": sai sem reprimir e volta depois
                 self.protest.respawn_at = time.monotonic() + DEVER_VOLTA_S
+                if self.ao_cobrar:
+                    self.ao_cobrar()                # e mostra no Painel do Alfred do que ele está falando
             return
         if self.protest.stage == 0 or self.protest.kind == "tristeza":
             return                                  # cartaz de fim, ou tristeza: só fecha, não reprime

@@ -634,8 +634,10 @@ def test_cartazes_do_dever(tmp_path, monkeypatch):
     assert p.escolher_cartaz(fim_por_carinho=False)["texto"] in secoes["cumprido"]
 
 
-def test_pet_cobra_o_que_venceu_e_cruza_os_bracos(app):
+def test_pet_cobra_o_que_venceu_e_cruza_os_bracos(app, monkeypatch):
     from pestinha.mind import protest_ctl
+    abertos = []
+    monkeypatch.setattr("pestinha.mind.alfred_ctl.QDesktopServices.openUrl", lambda url: abertos.append(url.toString()) or True)
     quadro(app, 1.0, negligencia=dict(NEGLIGENCIA, nivel=1.0))
     assert app.alfred.estado.negligencia["nivel"] == 1.0
     prof = dict(app.prof, stage_dwell=0.0)
@@ -653,6 +655,7 @@ def test_pet_cobra_o_que_venceu_e_cruza_os_bracos(app):
     app.dever_ctl.on_sign_clicked(cartaz)                                  # fechar não reprime: ele só volta depois
     assert app.dever.sign is None and app.dever.grievance == antes and app.dever.repressions == 0
     assert app.dever.respawn_at >= time.monotonic() + protest_ctl.DEVER_VOLTA_S - 5
+    assert abertos == [NEGLIGENCIA["link"]]                                # e abre no Painel o item cobrado
 
     # Alfred fora do ar (ou tudo resolvido): a cobrança passa e ele mostra o cartaz de fim
     for i in range(700):
