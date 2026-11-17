@@ -8,5 +8,6 @@ Sentidos: o que as leituras da plataforma significam (atividade, tela cheia, jan
 
 | Arquivo | O que faz |
 |---|---|
+| `alfred.py` | O que o Alfred (assistente que roda neste computador) está fazendo, lido dos arquivos que ele publica. |
 | `senses.py` | O computador como mundo sensorial. |
 | `timeline.py` | Uma linha por minuto da sua rotina, para o futuro LSTM. |

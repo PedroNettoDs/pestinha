@@ -89,6 +89,8 @@ TEMPO_CARTAZ_FIM = 3.5          # s que o cartaz de fim (acordo ou volto) fica
 # ---------------------------------------------------------------------------
 TAMANHO_MEME = 230              # px, lado maior de um meme entregue
 TAMANHO_MEME_CANTO = 120        # px, meme pequeno de revolta no cantinho
+BILHETE_ESPERA_MIN = 1200.0     # s: depois de um post-it, o próximo só vem após um tempo sorteado
+BILHETE_ESPERA_MAX = 3600.0     #    entre o mínimo e o máximo (20 a 60 min)
 
 # ---------------------------------------------------------------------------
 # Fogos de artifício
@@ -133,6 +135,9 @@ GANHO_PAPEL = 0.05              # bolinhas de papel por segundo, por Hz do motor
 LADO_JANELA_PET = 200         # px da janela transparente do corpo
 ZZZ_QUANTIDADE = 3
 ZZZ_PERIODO = 2.4               # s que cada Z leva para subir e sumir
+MADRUGADA = (0, 6)              # horas locais [início, fim): sem trabalho do Alfred, ele dorme
+OCIOSO_PARA_DORMIR = 3600.0     # s sem teclado nem mouse: ele dorme mesmo descansado
+VIGILIA_APOS_SUSTO = 600.0      # s acordado depois de ser acordado (cutucão, arrasto ou post-it do Alfred)
 
 # ---------------------------------------------------------------------------
 # Validação
@@ -207,6 +212,8 @@ _LIMITES = {
     "CARGA_FUGA_HZ_S": (float, 0.1, 10000.0),
     "LIMIAR_CANTO_HZ": (float, 0.0, 200.0),
     "GANHO_TRAVESSURA": (float, 0.0, 1.0),
+    "BILHETE_ESPERA_MIN": (float, 0.0, 86400.0),
+    "BILHETE_ESPERA_MAX": (float, 0.0, 86400.0),
     "GANHO_CARTAZ": (float, 0.0, 1.0),
     "GANHO_PAPEL": (float, 0.0, 1.0),
     "LADO_JANELA_PET": (int, 100, 1000),

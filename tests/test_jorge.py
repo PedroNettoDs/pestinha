@@ -37,7 +37,7 @@ def frases(pet_id):
 
 
 def test_jorge_existe_e_e_selecionavel():
-    assert config.list_pets(PATHS) == ["bryan", "jorge"]
+    assert config.list_pets(PATHS) == ["alfred", "bryan", "jorge"]
     jorge = config.load_pet(PATHS, "jorge")
     assert jorge["nome"] == "Jorge" and jorge["seed"] != config.load_pet(PATHS, "bryan")["seed"]
     assert len(jorge["temperamento"]) >= 8                   # nenhum campo descartado por tipo errado
@@ -46,7 +46,7 @@ def test_jorge_existe_e_e_selecionavel():
 def test_todo_temperamento_mexe_em_uma_ligacao_que_existe():
     """Uma chave com erro de digitação seria ignorada em silêncio; aqui ela falha."""
     validas = {f"{pre}->{post}" for pre, post, _w, _d in CONNECTIONS if pre in SENSORY_SPEC} | POOLS
-    for pet in ("bryan", "jorge"):
+    for pet in ("alfred", "bryan", "jorge"):
         chaves = set(config.load_pet(PATHS, pet)["temperamento"])
         assert chaves <= validas, (pet, chaves - validas)
 

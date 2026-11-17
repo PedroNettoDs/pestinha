@@ -1,8 +1,11 @@
-"""Partes que os três sistemas compartilham: rodar comandos do sistema e o atalho global via pynput."""
+"""Partes que os três sistemas compartilham: rodar comandos do sistema, abrir uma janela de navegador e o atalho global via pynput."""
 
+import shutil
 import subprocess
 
 from ..log import log
+
+NAVEGADORES_APP = ("brave-browser", "chromium", "chromium-browser", "google-chrome", "microsoft-edge")
 
 
 def rodar(comando, tempo=1.0):
@@ -12,6 +15,26 @@ def rodar(comando, tempo=1.0):
     except (OSError, subprocess.SubprocessError):
         return None
     return resultado.stdout if resultado.returncode == 0 else None
+
+
+def abrir_janela_web(url, x, y, largura, altura):
+    """
+    Abre `url` numa janela própria (o modo app dos navegadores Chromium), na posição e no tamanho pedidos, sem
+    esperar por ela. Devolve False se não houver um navegador desses: quem chama abre no navegador padrão.
+    """
+    for nome in NAVEGADORES_APP:
+        caminho = shutil.which(nome)
+        if not caminho:
+            continue
+        try:
+            subprocess.Popen([caminho, f"--app={url}", f"--window-size={largura},{altura}",
+                              f"--window-position={x},{y}"],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)       # o navegador não fecha junto com o pet
+        except OSError:
+            return False
+        return True
+    return False
 
 
 def atalho_pynput(callback):

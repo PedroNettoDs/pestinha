@@ -155,7 +155,7 @@ def test_repressao_aumenta_a_insatisfacao(buddy):
     assert pr.grievance > before and pr.repressions == 1
 
 
-def test_dormir_e_acordar_pela_energia(buddy):
+def test_dorme_pela_energia_e_nao_acorda_sozinho(buddy):
     body = buddy.pet.body
     body.grounded = True
     body.held = False
@@ -164,6 +164,8 @@ def test_dormir_e_acordar_pela_energia(buddy):
     assert buddy.sleep.asleep
     buddy.drives.energy = 1.0
     buddy.sleep.tick(0.0, body, False, 0, None)
+    assert buddy.sleep.asleep                               # descansado, continua dormindo
+    buddy.sleep.wake(startled=False)                        # o post-it do Alfred (ou a sua mão) acorda
     assert not buddy.sleep.asleep
 
 
@@ -178,3 +180,67 @@ def test_cutucada_habitua_na_rede(buddy):
         buddy.brain.stimulate({"POKE": 0.8})
         buddy.brain.step(100)
     assert buddy.brain.efficacy()["POKE"] < before
+
+
+def test_madrugada_sem_trabalho_do_alfred_ele_dorme_descansado(buddy):
+    body = buddy.pet.body
+    body.grounded, body.held = True, False
+    buddy.drives.energy = 1.0
+    buddy.sleep.tick(0.0, body, False, 0, None, noite=True)
+    assert buddy.sleep.asleep                               # dorme mesmo sem cansaço
+    buddy.sleep.tick(1.0, body, False, 0, None, noite=True)
+    assert buddy.sleep.asleep                               # e não acorda por estar descansado
+    buddy.sleep.tick(2.0, body, False, 0, None, noite=False)
+    assert buddy.sleep.asleep                               # amanheceu: continua, até um post-it ou a sua mão
+
+
+def test_uma_hora_sem_mexer_no_computador_ele_dorme(buddy, monkeypatch):
+    from pestinha.ajustes import OCIOSO_PARA_DORMIR
+    body = buddy.pet.body
+    body.grounded, body.held = True, False
+    buddy.drives.energy = 1.0
+    monkeypatch.setattr("pestinha.app.noite_de_sono", lambda estado: False)
+    monkeypatch.setattr("pestinha.app.senses.get_idle_seconds", lambda: OCIOSO_PARA_DORMIR - 1)
+    buddy.think()
+    assert not buddy.sleep.asleep
+    monkeypatch.setattr("pestinha.app.senses.get_idle_seconds", lambda: OCIOSO_PARA_DORMIR)
+    buddy.think()
+    assert buddy.sleep.asleep
+    monkeypatch.setattr("pestinha.app.senses.get_idle_seconds", lambda: 0.0)
+    buddy.think()
+    assert buddy.sleep.asleep                               # você voltou: ele não acorda por isso
+
+
+def test_acordado_no_susto_de_madrugada_fica_um_tempo_de_pe(buddy):
+    from pestinha.ajustes import VIGILIA_APOS_SUSTO
+    body = buddy.pet.body
+    body.grounded, body.held = True, False
+    buddy.drives.energy = 1.0
+    buddy.sleep.tick(0.0, body, False, 0, None, noite=True)
+    buddy.sleep.wake(startled=True)
+    buddy.emotion.override = None                           # o susto já passou
+    buddy.sleep.tick(1.0, body, False, 0, None, noite=True)
+    assert not buddy.sleep.asleep
+    buddy.sleep.tick(2.0 + VIGILIA_APOS_SUSTO, body, False, 0, None, noite=True)
+    assert buddy.sleep.asleep
+
+
+def test_madrugada_so_vale_no_horario_e_com_o_alfred_parado():
+    from pestinha.mind.sleep import noite_de_sono
+    from pestinha.sense.alfred import Estado
+    parado, ocupado = Estado(online=True), Estado(online=True, fila=({"id": "f", "tipo": "backup", "rotulo": "B"},))
+    assert noite_de_sono(parado, hora=3)
+    assert noite_de_sono(Estado(), hora=3)                  # Alfred fora do ar: ninguém chama
+    assert not noite_de_sono(parado, hora=14)
+    assert not noite_de_sono(ocupado, hora=3)
+    assert not noite_de_sono(Estado(online=True, agora=({"id": "a", "tipo": "email"},)), hora=3)
+
+
+def test_dormindo_a_carencia_e_a_tristeza_nao_crescem(buddy):
+    buddy.drives.contact = 0.5
+    buddy.drives.update(60.0, buddy.prof, True, 0.0, 0.0, False)
+    assert buddy.drives.contact == 0.5
+    buddy.sad.grievance = 0.1
+    buddy.pet_state.tone.r["SAD"] = 8.0
+    buddy.sad_ctl.tick(1.0, buddy.pet_state.tone, buddy.prof, False, 0.0, 1.0, dormindo=True)
+    assert buddy.sad.grievance <= 0.1

@@ -1,0 +1,31 @@
+{
+  "_ajuda": "Alfred: mordomo. Calmo, dedicado ao trabalho e difícil de irritar; atende quando pedem para trabalhar. É o personagem que acompanha o assistente Alfred (memory/alfred.json diz onde ele publica a atividade). aparencia: terno escuro, moldura prata e gravata clara.",
+  "nome": "Alfred",
+  "seed": 1943,
+  "temperamento": {
+    "PEDIDO->SENTAR": 1.4,
+    "CARESS->CALM": 1.3,
+    "NOVELTY->CURIOUS": 1.2,
+    "BOREDOM->PLAYFUL": 0.8,
+    "DISMISS->FRUSTRATION": 0.6,
+    "IMPACT->FRUSTRATION": 0.7,
+    "DRAG->FRUSTRATION": 0.5,
+    "TOY_TAKEN->FRUSTRATION": 0.5
+  },
+  "brincadeira": {
+    "bola": 0.6,
+    "arremesso": 0.2,
+    "postit": 0.8
+  },
+  "reacao_notebook": "triste",
+  "aparencia": {
+    "moldura": "#c9ccd6",
+    "casca": "#15171c",
+    "tela": "#0e1014",
+    "olho": "#eef3ff",
+    "brilho": "#ffffff",
+    "acessorios": {
+      "gravata": "#e9e9ee"
+    }
+  }
+}

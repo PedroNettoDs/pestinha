@@ -8,7 +8,7 @@ Tudo que depende do sistema operacional: programa em primeiro plano, tempo ocios
 
 | Arquivo | O que faz |
 |---|---|
-| `_comum.py` | Partes que os três sistemas compartilham: rodar comandos do sistema e o atalho global via pynput. |
+| `_comum.py` | Partes que os três sistemas compartilham: rodar comandos do sistema, abrir uma janela de navegador e o atalho global via pynput. |
 | `kwin.py` | KDE Plasma 6 no Wayland: as janelas do pet rodam pelo XWayland (main.py) e os sentidos vêm do KWin. |
 | `linux.py` | Linux (X11): xdotool e wmctrl para as janelas, xprintidle para o tempo ocioso, e pynput para o atalho. |
 | `macos.py` | MacOS: Quartz (pyobjc) para as janelas e o tempo ocioso; AppKit para o programa em primeiro plano. |

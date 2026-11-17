@@ -12,6 +12,8 @@ escolhe o certo na importação. Os retângulos são em pixels físicos (o app d
     sem_foco_nativo(janela_id)   a janela do pet não rouba o foco (quando o sistema permite); no macOS, fica na frente de tudo
     iniciar_atalho(callback)     Ctrl+Alt+Shift+B; devolve True se registrou
     cursor()                     (x, y) do cursor visto pelo sistema, ou None para usar o do Qt (só o kwin)
+    programa_em(x, y)            nome (minúsculo) do programa da janela da frente nesse ponto, ou None (só no Linux X11)
+    abrir_janela_web(url, x, y, largura, altura)   janela própria de navegador (modo app); False se não houver um
 
 Só no Windows, por enquanto (TEM_INICIO_AUTOMATICO diz se existe):
     inicia_com_sistema()         o programa está marcado para abrir ao entrar no sistema
@@ -20,6 +22,8 @@ Só no Windows, por enquanto (TEM_INICIO_AUTOMATICO diz se existe):
 
 import os
 import sys
+
+from . import _comum
 
 if sys.platform == "win32":
     from . import windows as _backend
@@ -40,6 +44,8 @@ janelas_visiveis = _backend.janelas_visiveis
 sem_foco_nativo = _backend.sem_foco_nativo
 iniciar_atalho = _backend.iniciar_atalho
 cursor = getattr(_backend, "cursor", lambda: None)
+programa_em = getattr(_backend, "programa_em", lambda x, y: None)
+abrir_janela_web = _comum.abrir_janela_web      # igual nos três sistemas
 
 TEM_INICIO_AUTOMATICO = hasattr(_backend, "definir_inicio_com_sistema")
 inicia_com_sistema = getattr(_backend, "inicia_com_sistema", lambda: False)

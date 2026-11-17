@@ -99,3 +99,14 @@ def test_aparencia_chega_na_janela_do_pet(tmp_path, monkeypatch):
             timer.stop()
         assert bool(app.pet.aparencia.acessorios) is tem_acessorio
         app.pet.grab()                                                     # pinta de verdade, sem erro
+
+
+def test_dormindo_veste_gorro_e_pijama_azuis():
+    from pestinha.body.desenho_rosto import PIJAMA
+    a = aparencia_de(config.load_pet(PATHS, "alfred")["aparencia"])
+    acordado, dormindo = pintar(a), pintar(a, "dormindo")
+    assert not pixels_de(acordado, PIJAMA)
+    azuis = pixels_de(dormindo, PIJAMA)
+    assert min(y for _x, y in azuis) < CY - BODY_H / 2 - 10          # o gorro passa do topo da cabeça
+    assert min(y for _x, y in azuis) >= 0                            # e cabe na janela
+    assert max(y for _x, y in azuis) > CY + BODY_H / 2 - 12          # o pijama cobre o corpo até embaixo

@@ -1,0 +1,2 @@
+# Bilhetes que o Alfred cola quando está triste. Um por linha. Linhas com # são ignoradas.
+# Vazio de propósito: ele não cola bilhete triste.

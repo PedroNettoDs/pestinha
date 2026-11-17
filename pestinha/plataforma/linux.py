@@ -1,5 +1,5 @@
 """
-Linux (X11): xdotool e wmctrl para as janelas, xprintidle para o tempo ocioso, e pynput para o atalho.
+Linux (X11): Xlib (ou wmctrl, sem ele) para a lista de janelas, xdotool para a janela ativa, xprintidle para o tempo ocioso, e pynput para o atalho.
 
 Em Wayland a maior parte dessas leituras não existe: o pet continua andando, mas não enxerga as janelas
 nem o tempo ocioso (fica como se você estivesse sempre ativo). Os comandos são opcionais; se faltarem,
@@ -45,6 +45,83 @@ def parse_wmctrl(texto, meu_pid, excluir):
             continue
         achadas.append((janela_id, (x, y, x + largura, y + altura), False))
     return achadas
+
+
+TIPOS_DE_JANELA = {"_NET_WM_WINDOW_TYPE_NORMAL", "_NET_WM_WINDOW_TYPE_DIALOG"}
+TODAS_AS_AREAS = 0xFFFFFFFF     # _NET_WM_DESKTOP de janela fixada em todas as áreas de trabalho
+
+
+def escolher_janelas(brutas, area_atual, meu_pid, excluir):
+    """
+    [(id, (l, t, r, b), maximizada)] de cima para baixo, só o que está de fato na tela. `brutas` vem de cima
+    para baixo: dicionários com id, pid, area, tipo, estados (nomes _NET_WM_*), x, y, largura, altura
+    (área cliente), moldura e sombra (esquerda, direita, cima, baixo). Saem a área de trabalho, os painéis,
+    as minimizadas, as de outra área de trabalho, as pequenas e as do próprio pet.
+    """
+    achadas = []
+    for j in brutas:
+        estados = j["estados"]
+        if j["tipo"] not in TIPOS_DE_JANELA or "_NET_WM_STATE_HIDDEN" in estados:
+            continue
+        if j["area"] not in (area_atual, TODAS_AS_AREAS) or j["pid"] == meu_pid or j["id"] in excluir:
+            continue
+        me, md, mc, mb = j["moldura"]       # barra de título e bordas do gerenciador: fazem parte da janela
+        se, sd, sc, sb = j["sombra"]        # sombra de quem desenha a própria barra (GTK): não faz parte
+        l, t = j["x"] - me + se, j["y"] - mc + sc
+        r, b = j["x"] + j["largura"] + md - sd, j["y"] + j["altura"] + mb - sb
+        if r - l < LARGURA_MINIMA or b - t < ALTURA_MINIMA:
+            continue
+        maximizada = {"_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"} <= set(estados)
+        achadas.append((j["id"], (l, t, r, b), maximizada))
+    return achadas
+
+
+class _X11:
+    """Conexão própria com o X para listar as janelas (o python-xlib vem com o pynput)."""
+
+    def __init__(self):
+        from Xlib import X, display
+        self.tudo = X.AnyPropertyType
+        self.tela = display.Display()
+        self.raiz = self.tela.screen().root
+        self._atomos = {}
+
+    def _valor(self, janela, nome):
+        if nome not in self._atomos:
+            self._atomos[nome] = self.tela.intern_atom(nome)
+        prop = janela.get_full_property(self._atomos[nome], self.tudo)
+        return list(prop.value) if prop else []
+
+    def _quatro(self, janela, nome):
+        valor = self._valor(janela, nome)
+        return tuple(valor) if len(valor) == 4 else (0, 0, 0, 0)
+
+    def janelas(self):
+        """(janelas de cima para baixo, área de trabalho atual); janela que fechou no meio da leitura é pulada."""
+        from Xlib import error
+        area = (self._valor(self.raiz, "_NET_CURRENT_DESKTOP") or [0])[0]
+        brutas = []
+        for janela_id in reversed(self._valor(self.raiz, "_NET_CLIENT_LIST_STACKING")):
+            janela = self.tela.create_resource_object("window", janela_id)
+            try:
+                tipos = self._valor(janela, "_NET_WM_WINDOW_TYPE")
+                geo, canto = janela.get_geometry(), janela.translate_coords(self.raiz, 0, 0)
+                brutas.append({
+                    "id": janela_id,
+                    "pid": (self._valor(janela, "_NET_WM_PID") or [0])[0],
+                    "area": (self._valor(janela, "_NET_WM_DESKTOP") or [area])[0],
+                    "tipo": self.tela.get_atom_name(tipos[0]) if tipos else "_NET_WM_WINDOW_TYPE_NORMAL",
+                    "estados": [self.tela.get_atom_name(a) for a in self._valor(janela, "_NET_WM_STATE")],
+                    "x": -canto.x, "y": -canto.y, "largura": geo.width, "altura": geo.height,
+                    "moldura": self._quatro(janela, "_NET_FRAME_EXTENTS"),
+                    "sombra": self._quatro(janela, "_GTK_FRAME_EXTENTS"),
+                })
+            except error.XError:
+                continue
+        return brutas, area
+
+
+_x11 = None         # _X11 ligado; False depois de falhar (sem python-xlib ou sem X): fica o wmctrl
 
 
 def _janela_ativa():
@@ -93,8 +170,44 @@ def tela_cheia():
 
 
 def janelas_visiveis(excluir, escala=1.0):
-    """Janelas visíveis de outros programas pelo wmctrl (sem as do próprio pet)."""
+    """
+    Janelas de outros programas que estão na tela, de cima para baixo. Sem o Xlib, cai no wmctrl, que não
+    sabe a ordem nem quais estão minimizadas (o pet quase não acha onde pousar).
+    """
+    global _x11
+    if _x11 is None:
+        try:
+            _x11 = _X11()
+        except Exception:
+            _x11 = False
+    if _x11:
+        try:
+            brutas, area = _x11.janelas()
+            return escolher_janelas(brutas, area, os.getpid(), excluir)
+        except Exception:
+            _x11 = None                 # a conexão caiu: tenta de novo na próxima leitura
     return parse_wmctrl(rodar(["wmctrl", "-lGp"]), os.getpid(), excluir)
+
+
+def programa_em(x, y):
+    """Nome e comando (minúsculos) do programa da janela que está na frente no ponto (x, y), ou None. Só com o Xlib."""
+    if not _x11:
+        return None
+    try:
+        brutas, area = _x11.janelas()
+    except Exception:
+        return None
+    pids = {j["id"]: j["pid"] for j in brutas}
+    for janela_id, (l, t, r, b), _maximizada in escolher_janelas(brutas, area, os.getpid(), set()):
+        if l <= x <= r and t <= y <= b:
+            try:
+                processo = psutil.Process(pids[janela_id])
+                # AppImage: o processo se chama "AppRun"; o nome do programa está no primeiro argumento
+                comando = os.path.basename((processo.cmdline() or [""])[0])
+                return f"{processo.name()} {comando}".lower()
+            except psutil.Error:
+                return None
+    return None
 
 
 def sem_foco_nativo(janela_id):

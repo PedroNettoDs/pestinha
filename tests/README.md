@@ -20,6 +20,7 @@ A exceção é `test_macos_real.py`: no macOS, abre janelinhas de verdade por al
 |---|---|
 | `macos_cocoa.py` | Roda em outro processo, com o Qt no Cocoa de verdade, para o test_macos_real.py. |
 | `test_30_bugs.py` | Regressão dos 30 bugs encontrados na rodada de fuzzing e revisão (docs/auditorias/BUGS_30_RODADA.md). |
+| `test_alfred.py` | Ligação com o Alfred: o leitor do retrato, o controlador que encena a atividade e o painel da fila. |
 | `test_aparencia.py` | Etapa 5 do multipet: cores e acessórios por pet, numa camada por cima do rosto. |
 | `test_app.py` | Testes de integração do app, com Qt em modo offscreen e tudo numa pasta temporária. |
 | `test_arquitetura.py` | Regra de camadas do pacote `pestinha`: cada camada só importa das que estão abaixo dela. |
@@ -36,8 +37,11 @@ A exceção é `test_macos_real.py`: no macOS, abre janelinhas de verdade por al
 | `test_castigo_real.py` | Cantinho no app inteiro, com relógio virtual: soltar no ar, pousar, ficar preso e reagir pela rede. |
 | `test_condicionamento.py` | Testes do condicionamento: aprender a reagir antes, extinguir, e persistir. |
 | `test_conteudo.py` | Etapa 2 do multipet: conteúdo por pet (frases, cartazes, memes, imagens). |
+| `test_digitacao.py` | Balanço de digitação: só enquanto ele está sentado no notebook, pequeno e rítmico. |
 | `test_escolha_pet.py` | Etapa 3 do multipet: escolha do personagem nas configurações e o nome certo em cada texto. |
+| `test_expressao_continua.py` | Rosto contínuo: a forma dos olhos segue (valência, ativação) do cérebro, misturando as predefinidas. |
 | `test_festa.py` | Fogos de artifício ligados à rede e brincadeira mais animada quando feliz. |
+| `test_giro_antecipacao.py` | Antecipação do giro: antes de pular girando, ele se inclina para o lado oposto e só então pula. |
 | `test_homeostase.py` | Homeostase: trabalhar é estímulo, então o tédio não sobe enquanto ele programa. |
 | `test_janela_na_frente.py` | No macOS o pet não some ao trocar de programa; as Configurações pedem o foco. |
 | `test_jorge.py` | Etapa 4 do multipet: o Jorge, segundo personagem, feito só de configuração e conteúdo. |
@@ -51,3 +55,4 @@ A exceção é `test_macos_real.py`: no macOS, abre janelinhas de verdade por al
 | `test_plataforma.py` | Plataforma: cada sistema expõe as mesmas funções, e as leituras de texto (wmctrl, xdotool, ioreg, janelas do Quartz) são testadas com saídas de exemplo, em qualquer sistema. |
 | `test_robustez.py` | Robustez: arquivo corrompido, assets faltando, log em arquivo. |
 | `test_robustez_v2.py` | Falhas do relatório técnico (docs/auditorias/ANALISE_TECNICA.md): cada caso tem um teste que reproduz o problema. |
+| `test_rodinha.py` | Rodinha do mouse: girar rápido deixa o pet tonto; girar devagar não. |

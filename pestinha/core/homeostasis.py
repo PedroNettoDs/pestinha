@@ -22,7 +22,6 @@ from ..mathutil import clamp, valor_real
 from ..store import read_json, write_json
 
 SLEEP_BELOW = 0.18          # energia abaixo disso: dorme (se puder)
-WAKE_ABOVE = 0.6            # energia acima disso: acorda sozinho (antes 0,95: dormia quase até o fim)
 BORED_BELOW = 0.35          # estimulação abaixo disso: tédio
 LONELY_ABOVE = 0.5          # contato acima disso: carência
 TIRED_BELOW = 0.5           # energia abaixo disso: cansaço
@@ -34,7 +33,8 @@ ENGAGED_RISE_S = 20.0       # tempo para chegar a esse nível
 # quanto cada acontecimento estimula (+) e satisfaz o contato (-)
 STIMULUS = {"app": 0.08, "novelty": 0.2, "poke": 0.15, "drag": 0.2, "throw": 0.35,
             "mischief": 0.25, "caress": 0.05}
-CONTACT = {"poke": 0.15, "drag": 0.1, "throw": 0.1, "caress": 0.25, "dismiss": 0.05}
+CONTACT = {"poke": 0.15, "drag": 0.1, "throw": 0.1, "caress": 0.25, "dismiss": 0.05,
+           "alfred": 0.5}      # você usou o Alfred (Painel, conversa, WhatsApp): ele foi notado
 
 
 class Drives:
@@ -72,7 +72,8 @@ class Drives:
             self.stimulation = clamp(self.stimulation - dt * tedio / prof["stim_decay"])
         # você longe: a falta é mais lenta (ele não "espera" você no banheiro); preso e sem visita, mais rápida
         falta = 0.3 if user_away else (CARENCIA_PRESO if preso and not visitado else 1.0)
-        self.contact = clamp(self.contact + dt / prof["contact_span"] * falta)
+        if not asleep:                                  # dormindo ele não sente a sua falta
+            self.contact = clamp(self.contact + dt / prof["contact_span"] * falta)
 
     def channels(self):
         """Os três níveis (tédio, cansaço, carência) como intensidades de 0 a 1, para a rede."""
@@ -85,10 +86,6 @@ class Drives:
     def sleepy(self):
         """Diz se a energia está baixa o bastante para ele querer dormir."""
         return self.energy < SLEEP_BELOW
-
-    def rested(self):
-        """Diz se a energia já está alta o bastante para acordar."""
-        return self.energy >= WAKE_ABOVE
 
     def describe(self):
         """Texto curto com os três níveis (para o log)."""

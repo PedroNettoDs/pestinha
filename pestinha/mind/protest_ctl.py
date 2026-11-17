@@ -16,6 +16,9 @@ from ..core.protesto import STAGE_NAMES
 from ..world.cartazes import FlagThing, criar_cartaz
 
 
+DEVER_VOLTA_S = 120.0        # s até o cartaz do dever voltar depois que você o fecha
+
+
 class ProtestController:
     """Liga o protesto à cena: mostra o cartaz preso no pet, a bandeja da revolução e as bolinhas de papel."""
     def __init__(self, protest, body, behavior, senses, drives, state, debug):
@@ -28,6 +31,7 @@ class ProtestController:
         self.state = state          # PetState: protest_stage é espelhado aqui
         self.debug = debug
         self.visivel = True         # o cartaz novo nasce com a visibilidade da sessão
+        self.ao_cobrar = None       # dever: chamado no clique do cartaz de cobrança (o app abre o item no Alfred)
 
     @property
     def stage(self):
@@ -40,10 +44,14 @@ class ProtestController:
 
     # ---------------- estágios ----------------
 
-    def tick(self, dt, tone, prof, caressing, now, lonely=0.0):
+    def tick(self, dt, tone, prof, caressing, now, lonely=0.0, negligencia=None, dormindo=False):
         """Integra a intensidade do sentimento. Devolve (antigo, novo) quando o estágio muda."""
+        if self.protest.kind == "dever":                 # segue o que o Alfred informa; sem Alfred, passa
+            self.protest.motivo = negligencia["texto"] if negligencia else ""
+            return self.protest.update(dt, 0.0, prof, False, now, alvo=negligencia["nivel"] if negligencia else 0.0)
         if self.protest.kind == "tristeza":
-            rate = tone.r["SAD"] + 0.5 * lonely          # triste + sozinho por muito tempo
+            # triste + sozinho por muito tempo; dormindo, a tristeza só passa
+            rate = 0.0 if dormindo else tone.r["SAD"] + 0.5 * lonely
             prof = dict(prof, grievance_up=prof["sad_up"], grievance_down=prof["sad_down"],
                         stage_up=prof["sad_stage_up"])
         else:
@@ -75,6 +83,12 @@ class ProtestController:
         if sign is not self.protest.sign:
             return
         self.drop_sign()
+        if self.protest.kind == "dever":
+            if self.protest.stage:                  # "como queira": sai sem reprimir e volta depois
+                self.protest.respawn_at = time.monotonic() + DEVER_VOLTA_S
+                if self.ao_cobrar:
+                    self.ao_cobrar()                # e mostra no Painel do Alfred do que ele está falando
+            return
         if self.protest.stage == 0 or self.protest.kind == "tristeza":
             return                                  # cartaz de fim, ou tristeza: só fecha, não reprime
         self.protest.repressed()

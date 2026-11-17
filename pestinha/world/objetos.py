@@ -98,6 +98,7 @@ class NoteThing(Thing):
         self.text = text
         self.small = small
         self.note_w, self.note_h = w, h
+        self.carimbo = ""           # texto miúdo na faixa de cima (o Alfred põe a hora em que o post-it nasceu)
 
     def paintEvent(self, _event):
         """Desenha o papel e o texto do post-it."""
@@ -114,6 +115,9 @@ class NoteThing(Thing):
         p.setBrush(QColor("#f5d84f"))
         p.drawRect(QRectF(rect.left(), rect.top(), rect.width(), 14))
         p.setPen(QColor("#3a3320"))
+        if self.carimbo:
+            p.setFont(QFont("Segoe Print", 7))
+            p.drawText(QRectF(rect.left(), rect.top(), rect.width() - 6, 14), Qt.AlignRight | Qt.AlignVCenter, self.carimbo)
         p.setFont(QFont("Segoe Print", 9 if self.small else 11))
         p.drawText(rect.adjusted(10, 18, -10, -8), Qt.AlignCenter | Qt.TextWordWrap, self.text)
         p.end()

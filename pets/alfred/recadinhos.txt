@@ -1,0 +1,4 @@
+# Recadinhos do Alfred. Um por linha. Linhas que começam com # são ignoradas.
+# Pode editar com ele rodando: ele relê o arquivo sozinho.
+o senhor já bebeu água hoje?
+a postura, senhor. as costas agradecem.

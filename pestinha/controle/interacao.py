@@ -8,9 +8,11 @@ Mixin de PestinhaApp: usa os atributos criados em PestinhaApp.__init__.
 """
 
 from ..log import log
+import math
 import time
 from PySide6.QtWidgets import QMenu
-from ..body.pet import cursor_pos
+from ..body.pet import THROW_MIN_SPEED, cursor_pos
+from ..ui.fila_alfred import preencher_menu
 from ..ajustes import (
     INSATISFACAO_NOTEBOOK,
     COOLDOWN_CUTUCADA as POKE_COOLDOWN,
@@ -79,6 +81,13 @@ class InteracaoMixin:
         if self.asleep:
             self.sleep.wake(startled=True)
 
+    def on_drag_ended(self):
+        """Você soltou o pet: se foi em cima de um programa que o Alfred conhece, ele age (arremesso não conta)."""
+        self.senses.set_dragging(False)
+        body = self.pet.body
+        if not self._congelado() and math.hypot(body.vx, body.vy) < THROW_MIN_SPEED:
+            self.alfred.solto_em(body.x, body.y, time.monotonic())
+
     def on_thrown(self, speed):
         """Você arremessou o pet: a velocidade vira intensidade do arremesso; ele não aprende com isso na pausa."""
         if self._congelado():
@@ -127,6 +136,12 @@ class InteracaoMixin:
         item("Mostrar o notebook" if self.mesa.escondido else "Esconder o notebook",
              self.menu_alternar_notebook)
         item("Fazer uma travessura agora", self.menu_mischief, perms["travessuras"])
+        if self.alfred.ligado:
+            menu.addSeparator()
+            preencher_menu(menu.addMenu("Alfred: trabalhar em"), self.alfred)
+            item("Fila do Alfred", lambda: self.floats.toggle("alfred"))
+            item("Conversar com o Alfred", self.alfred.abrir_conversa, "conversa" in self.alfred.estado.links)
+            item("Abrir terminal (Painel do Alfred)", self.alfred.abrir_painel, "painel" in self.alfred.estado.links)
         menu.addSeparator()
         item("Cantinho do castigo", lambda: self.castigo.toggle(self.bounds()))
         item("Painel de protesto", lambda: self.floats.toggle("greve"))
